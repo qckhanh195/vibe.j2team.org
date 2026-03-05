@@ -1,0 +1,24 @@
+# Các file quan trọng cần review từ maintainer
+
+# File cấu hình
+package.json @J2TEAM
+pnpm-lock.yaml @J2TEAM
+vite.config.ts @J2TEAM
+tsconfig*.json @J2TEAM
+eslint.config.ts @J2TEAM
+.oxlintrc.json @J2TEAM
+
+# File core của ứng dụng
+src/main.ts @J2TEAM
+src/App.vue @J2TEAM
+src/router/index.ts @J2TEAM
+src/assets/main.css @J2TEAM
+src/views/HomePage.vue @J2TEAM
+
+# CI & GitHub
+.github/ @J2TEAM
+
+# Tài liệu
+CONTRIBUTING.md @J2TEAM
+AGENTS.md @J2TEAM
+docs/ @J2TEAM

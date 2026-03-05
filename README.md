@@ -1,0 +1,70 @@
+# vibe.j2team.dev
+
+**Sẽ thế nào nếu cả nhóm [J2TEAM Community](https://www.facebook.com/groups/j2team.community/) vibe code cùng nhau?**
+
+Trang chủ là một Launcher, dẫn link tới các trang con do thành viên tạo ra. Mọi người tự do vibe code thoải mái trên trang của mình!
+
+## Tech Stack
+
+- [Vue 3](https://vuejs.org/) - Progressive JavaScript Framework
+- [TypeScript](https://www.typescriptlang.org/) - JavaScript với static typing
+- [Vite](https://vite.dev/) - Build tool thế hệ mới
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
+- [Vue Router](https://router.vuejs.org/) - Routing
+- [Pinia](https://pinia.vuejs.org/) - State management
+
+## Bắt đầu
+
+```sh
+pnpm install
+pnpm dev
+```
+
+## Nguyên tắc
+
+1. **Không có database** — dự án không sử dụng database
+2. **Luôn có link về trang chủ** — mỗi trang con phải có link quay lại trang chủ
+3. **Ngôn ngữ: tiếng Việt (ưu tiên) hoặc tiếng Anh**
+4. **Không trùng ứng dụng con đã có** — kiểm tra danh sách trang trước khi tạo mới
+5. **Mỗi trang con hoạt động độc lập** — không sửa file dùng chung ngoài `router/index.ts` và `HomePage.vue`
+6. **Responsive** — trang phải hiển thị tốt trên mobile
+7. **Không thêm dependency mới** trừ khi thật sự cần và được approve
+8. **Ghi rõ tên tác giả** trong mảng `pages` ở `HomePage.vue`
+
+## Cách tham gia
+
+1. Fork repo và clone về máy
+2. Tạo thư mục mới trong `src/views/<tên-trang>/` với file `index.vue`
+3. Thêm route trong `src/router/index.ts`
+4. Thêm link trang của bạn vào mảng `pages` trong `src/views/HomePage.vue`
+5. Tạo Pull Request và chờ merge!
+
+Xem trang mẫu: [`src/views/hello-world/index.vue`](src/views/hello-world/index.vue)
+
+Xem hướng dẫn thiết kế: [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md)
+
+## Cấu trúc dự án
+
+```
+src/
+  views/
+    HomePage.vue                 # Trang chủ (launcher)
+    hello-world/index.vue        # Trang mẫu
+    <tên-của-bạn>/index.vue      # Trang của bạn
+  router/index.ts                # Cấu hình routes
+  stores/                        # Pinia stores
+```
+
+## Các lệnh thường dùng
+
+| Lệnh | Mô tả |
+|------|-------|
+| `pnpm dev` | Chạy dev server |
+| `pnpm build` | Build production |
+| `pnpm test:unit` | Chạy unit tests |
+| `pnpm lint` | Lint code |
+| `pnpm format` | Format code |
+
+## IDE
+
+[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar)
