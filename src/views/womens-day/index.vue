@@ -9,11 +9,7 @@ const noBtnStyle = ref({ transform: 'translate(0px, 0px)' })
 const envelopeStatus = ref(0)
 
 const nextStage = () => {
-  if (stage.value === 0) {
-    stage.value = 1
-  } else if (stage.value === 1) {
-    stage.value = 2
-  }
+  stage.value = Math.min(stage.value + 1, 2)
 }
 
 const moveNoBtn = () => {
