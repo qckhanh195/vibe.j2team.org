@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import type { StoryData, Character, StageDirection, DialogueLine } from './types'
 
 const props = defineProps<{ story: StoryData }>()
@@ -173,6 +173,11 @@ watch(
   },
   { immediate: true },
 )
+
+onUnmounted(() => {
+  if (typeTimer) clearTimeout(typeTimer)
+  typeTimer = null
+})
 </script>
 
 <template>
