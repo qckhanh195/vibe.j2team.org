@@ -85,7 +85,8 @@ export function useStats() {
       expected.setDate(expected.getDate() - i)
       const expectedKey = expected.toISOString().slice(0, 10)
 
-      if (sorted[i].date === expectedKey) {
+      const entry = sorted[i]
+      if (entry?.date === expectedKey) {
         count++
       } else {
         break

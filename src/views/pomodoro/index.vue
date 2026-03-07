@@ -102,7 +102,7 @@ function formatFocusTime(minutes: number): string {
 function getDayLabel(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00')
   const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
-  return days[date.getDay()]
+  return days[date.getDay()] ?? ''
 }
 
 watch(mode, () => {
