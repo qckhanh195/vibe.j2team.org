@@ -40,6 +40,8 @@ function extractPath(globKey: string): string {
   return match ? `/${match[1]}` : ''
 }
 
+const featuredIndex = new Map(featuredPaths.map((p, i) => [p, i]))
+
 export const pages: PageInfo[] = Object.entries(metaModules)
   .map(([key, module]) => ({
     ...module.default,
@@ -47,12 +49,8 @@ export const pages: PageInfo[] = Object.entries(metaModules)
   }))
   .filter((p) => p.path !== '' && !p.hidden)
   .sort((a, b) => {
-    const aFeatured = featuredPaths.indexOf(a.path)
-    const bFeatured = featuredPaths.indexOf(b.path)
-
-    if (aFeatured !== -1 && bFeatured !== -1) return aFeatured - bFeatured
-    if (aFeatured !== -1) return -1
-    if (bFeatured !== -1) return 1
-
+    const aIdx = featuredIndex.get(a.path) ?? Infinity
+    const bIdx = featuredIndex.get(b.path) ?? Infinity
+    if (aIdx !== bIdx) return aIdx - bIdx
     return a.name.localeCompare(b.name)
   })
