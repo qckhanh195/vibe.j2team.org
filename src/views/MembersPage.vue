@@ -27,7 +27,7 @@ const searchInputRef = useTemplateRef<HTMLInputElement>('searchInput')
 useSearchShortcut(searchInputRef)
 
 type SortMode = 'apps' | 'name'
-const sortBy = ref<SortMode>('apps')
+const sortBy = ref<SortMode>('name')
 const sortAsc = ref(false)
 
 function toggleSort(mode: SortMode) {
