@@ -28,6 +28,7 @@ const {
   resetPlayer,
   expProgress,
   hpPercent,
+  bossCountdown,
 } = useGameState()
 
 type Tab = 'board' | 'shop'
@@ -125,7 +126,7 @@ function switchTab(tab: Tab) {
                 />
               </span>
               <span class="font-display text-[10px] tracking-[0.3em] text-accent-amber/60 uppercase"
-                >Hội Đồng Lính Đánh Thuê</span
+                >Hệ thống người chơi</span
               >
               <span class="flex gap-0.5">
                 <span
@@ -138,12 +139,12 @@ function switchTab(tab: Tab) {
             <h1
               class="font-display text-3xl sm:text-5xl font-bold text-accent-amber tracking-widest"
             >
-              BẢNG CÁO THỊ
+              BẢNG NHIỆM VỤ
             </h1>
             <div class="flex items-center justify-center gap-2 mt-1">
               <div class="h-px flex-1 bg-accent-amber/30" />
               <span class="font-display text-[10px] tracking-[0.2em] text-text-dim"
-                >BOUNTY BOARD</span
+                >QUEST BOARD</span
               >
               <div class="h-px flex-1 bg-accent-amber/30" />
             </div>
@@ -158,7 +159,7 @@ function switchTab(tab: Tab) {
         <p class="text-text-secondary text-sm animate-fade-up animate-delay-2">
           Hoàn thành nhiệm vụ thực tế mỗi ngày để nhận thưởng EXP và Vàng.
           <br class="hidden sm:block" />
-          Tích lũy đủ 3 nhiệm vụ để kích hoạt sự kiện BOSS!
+          Tích lũy đủ 5 nhiệm vụ để kích hoạt sự kiện BOSS!
         </p>
       </header>
 
@@ -233,7 +234,7 @@ function switchTab(tab: Tab) {
           <div class="flex items-center gap-2 text-xs text-text-dim font-display">
             <Icon icon="lucide:skull" class="size-3.5 text-red-400/50" />
             BOSS sau
-            <span class="text-red-400 font-bold">{{ 3 - (player.completedCount % 3) }}</span>
+            <span class="text-red-400 font-bold">{{ bossCountdown }}</span>
             nhiệm vụ
           </div>
         </div>

@@ -1,6 +1,14 @@
 export type Rarity = 'white' | 'blue' | 'purple' | 'gold'
 export type Rank = 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'SS'
-export type QuestCategory = 'study' | 'physical' | 'life' | 'mental' | 'social' | 'creative'
+export type QuestCategory =
+  | 'study'
+  | 'physical'
+  | 'life'
+  | 'mental'
+  | 'social'
+  | 'creative'
+  | 'finance'
+  | 'adventure'
 
 export interface QuestTemplate {
   id: string
@@ -42,6 +50,7 @@ export interface PlayerState {
   rank: Rank
   completedCount: number
   expBoostCharges: number
+  maxActiveQuests: number
 }
 
 export interface ShopItem {
@@ -50,7 +59,7 @@ export interface ShopItem {
   description: string
   price: number
   icon: string
-  effect: 'hp_potion' | 'exp_scroll' | 'dragon_heart'
+  effect: 'hp_potion' | 'exp_scroll' | 'dragon_heart' | 'quest_slot'
 }
 
 export interface RarityConfig {

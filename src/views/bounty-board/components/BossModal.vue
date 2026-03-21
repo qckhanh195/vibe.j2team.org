@@ -127,7 +127,7 @@ function handleFail() {
                 class="flex-1 border-2 border-accent-coral bg-accent-coral/10 py-3 font-display text-sm tracking-widest text-accent-coral transition hover:bg-accent-coral/20 uppercase"
                 @click="handleComplete"
               >
-                ✅ CHIẾN THẮNG
+                🙌 CHIẾN THẮNG
               </button>
               <button
                 class="flex-1 border-2 border-red-500/50 py-3 font-display text-sm tracking-widest text-red-400/70 transition hover:border-red-500 hover:text-red-400 uppercase"

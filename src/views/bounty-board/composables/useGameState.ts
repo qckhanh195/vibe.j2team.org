@@ -1,15 +1,25 @@
 import { computed, ref } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
 import { useIntervalFn } from '@vueuse/core'
-import type { PlayerState, Quest, ActiveQuest, Rarity, Rank, Notification } from '../types'
+import type {
+  PlayerState,
+  Quest,
+  ActiveQuest,
+  QuestTemplate,
+  Rarity,
+  Rank,
+  Notification,
+} from '../types'
 import {
   AVAILABLE_QUESTS,
   RARITY_CONFIG,
   RARITIES,
   RANK_CONFIG,
+  RANK_UP_COSTS,
   SHOP_ITEMS,
   BOARD_SIZE,
   REFRESH_COST,
+  BOSS_INTERVAL,
 } from '../constants'
 
 function randFrom<T>(arr: T[]): T {
@@ -22,16 +32,6 @@ function generateUid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-function calcRankFromExp(exp: number): Rank {
-  let rank: Rank = 'F'
-  for (const cfg of RANK_CONFIG) {
-    if (exp >= cfg.minExp) {
-      rank = cfg.label
-    }
-  }
-  return rank
-}
-
 function rollRarity(): Rarity {
   const total = RARITIES.reduce((sum, r) => sum + RARITY_CONFIG[r].weight, 0)
   let roll = Math.random() * total
@@ -42,8 +42,7 @@ function rollRarity(): Rarity {
   return 'white'
 }
 
-function buildQuest(rarity: Rarity, isBoss = false): Quest {
-  const template = randFrom(AVAILABLE_QUESTS)
+function buildQuestFromTemplate(template: QuestTemplate, rarity: Rarity, isBoss = false): Quest {
   const cfg = RARITY_CONFIG[rarity]
   const expMult = isBoss ? cfg.expMult * 1.5 : cfg.expMult
   const timeMult = isBoss ? Math.min(cfg.timeMult * 0.4, 0.5) : cfg.timeMult
@@ -70,6 +69,7 @@ const defaultPlayer: PlayerState = {
   rank: 'F',
   completedCount: 0,
   expBoostCharges: 0,
+  maxActiveQuests: 3,
 }
 
 export function useGameState() {
@@ -81,6 +81,11 @@ export function useGameState() {
 
   const notifications = ref<Notification[]>([])
 
+  // Backfill maxActiveQuests for existing saves that don't have it
+  if (!player.value.maxActiveQuests) {
+    player.value.maxActiveQuests = 3
+  }
+
   function pushNotif(type: Notification['type'], message: string) {
     const id = generateUid()
     notifications.value.push({ id, type, message })
@@ -89,14 +94,18 @@ export function useGameState() {
     }, 3500)
   }
 
-  // ── Board ────────────────────────────────────────────────────────────────
+  // ── Board (no duplicates) ─────────────────────────────────────────────────
+
+  function pickUniqueTemplates(count: number, excludeIds: Set<string>): QuestTemplate[] {
+    const pool = AVAILABLE_QUESTS.filter((t) => !excludeIds.has(t.id))
+    const shuffled = [...pool].sort(() => Math.random() - 0.5)
+    return shuffled.slice(0, Math.min(count, shuffled.length))
+  }
 
   function fillBoard() {
-    const quests: Quest[] = []
-    for (let i = 0; i < BOARD_SIZE; i++) {
-      quests.push(buildQuest(rollRarity()))
-    }
-    boardQuests.value = quests
+    const excluded = new Set<string>()
+    const templates = pickUniqueTemplates(BOARD_SIZE, excluded)
+    boardQuests.value = templates.map((t) => buildQuestFromTemplate(t, rollRarity()))
   }
 
   if (boardQuests.value.length === 0) {
@@ -112,11 +121,20 @@ export function useGameState() {
       player.value.gold -= REFRESH_COST
     }
     fillBoard()
-    pushNotif('success', '🎲 Bảng cáo thị đã được làm mới!')
+    pushNotif('success', '🎲 Bảng nhiệm vụ đã được làm mới!')
   }
 
   function acceptQuest(uid: string) {
     if (bossActive.value) return
+    const maxSlots = player.value.maxActiveQuests ?? 3
+    if (activeQuests.value.length >= maxSlots) {
+      pushNotif(
+        'warning',
+        `Đã đạt giới hạn ${maxSlots} nhiệm vụ cùng lúc! Mua Huy Hiệu để mở thêm.`,
+      )
+      return
+    }
+
     const idx = boardQuests.value.findIndex((q) => q.uid === uid)
     if (idx === -1) return
     const quest = boardQuests.value[idx]
@@ -130,8 +148,21 @@ export function useGameState() {
       isBoss: false,
     }
     activeQuests.value.push(active)
-    boardQuests.value.splice(idx, 1)
-    boardQuests.value.push(buildQuest(rollRarity()))
+
+    // Replace the slot with a new unique quest
+    const existingIds = new Set([
+      ...boardQuests.value.map((q) => q.templateId),
+      ...activeQuests.value.map((q) => q.templateId),
+    ])
+    existingIds.delete(quest.templateId) // just accepted, so we can still not re-add same
+    const pool = AVAILABLE_QUESTS.filter((t) => !existingIds.has(t.id))
+    if (pool.length > 0) {
+      const template = randFrom(pool)
+      boardQuests.value.splice(idx, 1, buildQuestFromTemplate(template, rollRarity()))
+    } else {
+      boardQuests.value.splice(idx, 1)
+    }
+
     pushNotif('success', `⚔️ Đã chấp nhận: ${quest.name}`)
   }
 
@@ -144,7 +175,7 @@ export function useGameState() {
 
   // ── Quest Completion ──────────────────────────────────────────────────────
 
-  function applyExpGain(base: number) {
+  function applyExpGain(base: number): number {
     let gain = base
     if (player.value.expBoostCharges > 0) {
       gain = base * 2
@@ -156,11 +187,31 @@ export function useGameState() {
   }
 
   function checkRankUp() {
-    const newRank = calcRankFromExp(player.value.exp)
-    if (newRank !== player.value.rank) {
-      player.value.rank = newRank
-      const cfg = RANK_CONFIG.find((r) => r.label === newRank)
-      pushNotif('levelup', `🎉 THĂNG HẠNG! Bạn đã đạt Rank ${newRank} — ${cfg?.title ?? ''}!`)
+    const rankOrder: Rank[] = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS']
+    let currentIdx = rankOrder.indexOf(player.value.rank)
+
+    while (currentIdx < rankOrder.length - 1) {
+      const nextRank = rankOrder[currentIdx + 1]
+      if (!nextRank) break
+      const nextCfg = RANK_CONFIG.find((r) => r.label === nextRank)
+      if (!nextCfg) break
+
+      if (player.value.exp < nextCfg.minExp) break
+
+      const cost = RANK_UP_COSTS[nextRank] ?? 0
+      if (player.value.gold < cost) {
+        pushNotif(
+          'warning',
+          `EXP đủ lên Rank ${nextRank}! Cần thêm ${cost - player.value.gold} Gold để thăng cấp.`,
+        )
+        break
+      }
+
+      player.value.gold -= cost
+      player.value.rank = nextRank
+      currentIdx++
+      const goldMsg = cost > 0 ? ` (−${cost} Gold)` : ''
+      pushNotif('levelup', `🎉 THĂNG HẠNG ${nextRank} — ${nextCfg.title}!${goldMsg}`)
     }
   }
 
@@ -174,15 +225,12 @@ export function useGameState() {
     player.value.gold += quest.gold
     player.value.hp = Math.min(player.value.maxHp, player.value.hp + quest.hpRestore)
     player.value.completedCount++
-
     activeQuests.value.splice(idx, 1)
-    checkRankUp()
-    pushNotif(
-      'success',
-      `✅ Hoàn thành! +${gained} EXP, +${quest.gold} Gold, +${quest.hpRestore} HP`,
-    )
 
-    if (player.value.completedCount % 3 === 0 && !bossActive.value) {
+    checkRankUp()
+    pushNotif('success', `✅ Xong! +${gained} EXP, +${quest.gold} Gold, +${quest.hpRestore} HP`)
+
+    if (player.value.completedCount % BOSS_INTERVAL === 0 && !bossActive.value) {
       triggerBoss()
     }
   }
@@ -197,9 +245,8 @@ export function useGameState() {
     const expLoss = Math.min(player.value.exp, 5)
     player.value.hp = Math.max(0, player.value.hp - hpLoss)
     player.value.exp = Math.max(0, player.value.exp - expLoss)
-    player.value.rank = calcRankFromExp(player.value.exp)
     activeQuests.value.splice(idx, 1)
-    pushNotif('fail', `💀 Thất bại: ${quest.name} — -${hpLoss} HP, -${expLoss} EXP`)
+    pushNotif('fail', `💀 Thất bại: ${quest.name} — −${hpLoss} HP, −${expLoss} EXP`)
   }
 
   function skipQuest(uid: string) {
@@ -214,19 +261,16 @@ export function useGameState() {
     player.value.hp = Math.max(0, player.value.hp - hpLoss)
     player.value.gold = Math.max(0, player.value.gold - goldLoss)
     player.value.exp = Math.max(0, player.value.exp - expLoss)
-    player.value.rank = calcRankFromExp(player.value.exp)
     activeQuests.value.splice(idx, 1)
-    pushNotif(
-      'warning',
-      `⏭️ Bỏ qua: ${quest.name} — -${hpLoss} HP, -${goldLoss} Gold, -${expLoss} EXP`,
-    )
+    pushNotif('warning', `⏭️ Bỏ qua: ${quest.name} — −${hpLoss} HP, −${goldLoss} Gold`)
   }
 
   // ── Boss System ───────────────────────────────────────────────────────────
 
   function triggerBoss() {
     const bossRarity: Rarity = Math.random() < 0.3 ? 'gold' : 'purple'
-    const quest = buildQuest(bossRarity, true)
+    const template = randFrom(AVAILABLE_QUESTS)
+    const quest = buildQuestFromTemplate(template, bossRarity, true)
     const now = Date.now()
     const boss: ActiveQuest = {
       ...quest,
@@ -236,6 +280,7 @@ export function useGameState() {
     }
     bossQuest.value = boss
     bossActive.value = true
+    pushNotif('boss', '⚠️ BOSS XUẤT HIỆN! Hoàn thành nhiệm vụ ngay!')
   }
 
   function completeBoss() {
@@ -254,10 +299,9 @@ export function useGameState() {
     if (!bossQuest.value) return
     const hpLoss = Math.round(player.value.maxHp * 0.5)
     player.value.hp = Math.max(0, player.value.hp - hpLoss)
-    player.value.rank = calcRankFromExp(player.value.exp)
     bossActive.value = false
     bossQuest.value = null
-    pushNotif('fail', `💥 Boss đánh bại bạn! -${hpLoss} HP (50% máu tối đa)`)
+    pushNotif('fail', `💥 Boss đánh bại bạn! −${hpLoss} HP (−50% máu)`)
   }
 
   // ── Shop ──────────────────────────────────────────────────────────────────
@@ -274,14 +318,26 @@ export function useGameState() {
     if (item.effect === 'hp_potion') {
       const healed = Math.min(30, player.value.maxHp - player.value.hp)
       player.value.hp += healed
-      pushNotif('success', `🧪 Đã dùng ${item.name}! +${healed} HP`)
+      pushNotif('success', `🧪 ${item.name}: +${healed} HP`)
     } else if (item.effect === 'exp_scroll') {
       player.value.expBoostCharges += 3
-      pushNotif('success', `📜 Đã dùng ${item.name}! EXP x2 cho 3 nhiệm vụ tới!`)
+      pushNotif('success', `📜 ${item.name}: EXP x2 cho 3 nhiệm vụ!`)
     } else if (item.effect === 'dragon_heart') {
       player.value.maxHp += 20
       player.value.hp = player.value.maxHp
-      pushNotif('success', `💎 Đã dùng ${item.name}! Máu Tối Đa +20, hồi đầy!`)
+      pushNotif('success', `💎 ${item.name}: Máu Tối Đa +20, hồi đầy!`)
+    } else if (item.effect === 'quest_slot') {
+      const current = player.value.maxActiveQuests ?? 3
+      if (current >= 6) {
+        player.value.gold += item.price
+        pushNotif('warning', 'Đã đạt giới hạn tối đa 6 nhiệm vụ!')
+        return
+      }
+      player.value.maxActiveQuests = current + 1
+      pushNotif(
+        'success',
+        `🔓 ${item.name}: Nhận được ${player.value.maxActiveQuests} nhiệm vụ cùng lúc!`,
+      )
     }
   }
 
@@ -314,6 +370,11 @@ export function useGameState() {
 
   const hpPercent = computed(() => Math.round((player.value.hp / player.value.maxHp) * 100))
 
+  const bossCountdown = computed(() => {
+    const rem = BOSS_INTERVAL - (player.value.completedCount % BOSS_INTERVAL)
+    return rem === BOSS_INTERVAL && player.value.completedCount === 0 ? BOSS_INTERVAL : rem
+  })
+
   function resetPlayer() {
     player.value = { ...defaultPlayer }
     boardQuests.value = []
@@ -331,6 +392,7 @@ export function useGameState() {
     bossActive,
     bossQuest,
     notifications,
+    bossCountdown,
     refreshBoard,
     acceptQuest,
     randomAccept,
