@@ -51,6 +51,7 @@ export interface PlayerState {
   completedCount: number
   expBoostCharges: number
   maxActiveQuests: number
+  freeSkipCharges: number
 }
 
 export interface ShopItem {
@@ -59,7 +60,14 @@ export interface ShopItem {
   description: string
   price: number
   icon: string
-  effect: 'hp_potion' | 'exp_scroll' | 'dragon_heart' | 'quest_slot'
+  effect:
+    | 'hp_potion'
+    | 'exp_scroll'
+    | 'dragon_heart'
+    | 'quest_slot'
+    | 'big_hp_potion'
+    | 'gold_scroll'
+    | 'free_skip'
 }
 
 export interface RarityConfig {

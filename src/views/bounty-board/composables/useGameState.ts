@@ -70,6 +70,7 @@ const defaultPlayer: PlayerState = {
   completedCount: 0,
   expBoostCharges: 0,
   maxActiveQuests: 3,
+  freeSkipCharges: 0,
 }
 
 export function useGameState() {
@@ -81,9 +82,12 @@ export function useGameState() {
 
   const notifications = ref<Notification[]>([])
 
-  // Backfill maxActiveQuests for existing saves that don't have it
+  // Backfill fields for existing saves
   if (!player.value.maxActiveQuests) {
     player.value.maxActiveQuests = 3
+  }
+  if (player.value.freeSkipCharges === undefined) {
+    player.value.freeSkipCharges = 0
   }
 
   function pushNotif(type: Notification['type'], message: string) {
@@ -255,6 +259,17 @@ export function useGameState() {
     const quest = activeQuests.value[idx]
     if (!quest) return
 
+    if ((player.value.freeSkipCharges ?? 0) > 0) {
+      // Free skip — no penalty
+      player.value.freeSkipCharges = (player.value.freeSkipCharges ?? 1) - 1
+      activeQuests.value.splice(idx, 1)
+      pushNotif(
+        'success',
+        `🛡️ Bỏ qua miễn phí: ${quest.name} (còn ${player.value.freeSkipCharges} lệnh)`,
+      )
+      return
+    }
+
     const hpLoss = Math.round(player.value.maxHp * 0.1)
     const goldLoss = Math.min(player.value.gold, 5)
     const expLoss = Math.min(player.value.exp, 5)
@@ -262,7 +277,7 @@ export function useGameState() {
     player.value.gold = Math.max(0, player.value.gold - goldLoss)
     player.value.exp = Math.max(0, player.value.exp - expLoss)
     activeQuests.value.splice(idx, 1)
-    pushNotif('warning', `⏭️ Bỏ qua: ${quest.name} — −${hpLoss} HP, −${goldLoss} Gold`)
+    pushNotif('warning', `⏩️ Bỏ qua: ${quest.name} — −${hpLoss} HP, −${goldLoss} Gold`)
   }
 
   // ── Boss System ───────────────────────────────────────────────────────────
@@ -337,6 +352,19 @@ export function useGameState() {
       pushNotif(
         'success',
         `🔓 ${item.name}: Nhận được ${player.value.maxActiveQuests} nhiệm vụ cùng lúc!`,
+      )
+    } else if (item.effect === 'big_hp_potion') {
+      const healed = Math.min(60, player.value.maxHp - player.value.hp)
+      player.value.hp += healed
+      pushNotif('success', `❤️‍🔥 ${item.name}: +${healed} HP!`)
+    } else if (item.effect === 'gold_scroll') {
+      player.value.gold += 100
+      pushNotif('success', `🪙 ${item.name}: +100 Gold tài lộc!`)
+    } else if (item.effect === 'free_skip') {
+      player.value.freeSkipCharges = (player.value.freeSkipCharges ?? 0) + 1
+      pushNotif(
+        'success',
+        `🛡️ ${item.name}: +1 lệnh xá tội (tổng ${player.value.freeSkipCharges})!`,
       )
     }
   }

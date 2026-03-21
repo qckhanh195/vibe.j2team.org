@@ -16,6 +16,9 @@ const itemColors: Record<string, string> = {
   exp_scroll: 'border-accent-amber text-accent-amber',
   dragon_heart: 'border-violet-400 text-violet-300',
   quest_slot: 'border-teal-400 text-teal-300',
+  big_hp_potion: 'border-rose-400 text-rose-300',
+  gold_scroll: 'border-yellow-400 text-yellow-300',
+  free_skip: 'border-indigo-400 text-indigo-300',
 }
 
 const itemBgColors: Record<string, string> = {
@@ -23,6 +26,9 @@ const itemBgColors: Record<string, string> = {
   exp_scroll: 'bg-accent-amber/5',
   dragon_heart: 'bg-violet-500/5',
   quest_slot: 'bg-teal-500/5',
+  big_hp_potion: 'bg-rose-500/5',
+  gold_scroll: 'bg-yellow-500/5',
+  free_skip: 'bg-indigo-500/5',
 }
 
 const itemBadgeColors: Record<string, string> = {
@@ -30,6 +36,9 @@ const itemBadgeColors: Record<string, string> = {
   exp_scroll: 'bg-accent-amber/20 text-accent-amber',
   dragon_heart: 'bg-violet-500/20 text-violet-300',
   quest_slot: 'bg-teal-500/20 text-teal-300',
+  big_hp_potion: 'bg-rose-500/20 text-rose-300',
+  gold_scroll: 'bg-yellow-500/20 text-yellow-300',
+  free_skip: 'bg-indigo-500/20 text-indigo-300',
 }
 
 function handleBuy(itemId: string) {
