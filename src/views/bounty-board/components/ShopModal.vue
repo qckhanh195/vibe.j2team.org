@@ -19,6 +19,11 @@ const itemColors: Record<string, string> = {
   big_hp_potion: 'border-rose-400 text-rose-300',
   gold_scroll: 'border-yellow-400 text-yellow-300',
   free_skip: 'border-indigo-400 text-indigo-300',
+  big_exp_scroll: 'border-cyan-400 text-cyan-300',
+  instant_exp: 'border-emerald-400 text-emerald-300',
+  big_gold: 'border-amber-400 text-amber-300',
+  time_extend: 'border-orange-400 text-orange-300',
+  warrior_gauntlet: 'border-slate-400 text-slate-300',
 }
 
 const itemBgColors: Record<string, string> = {
@@ -29,6 +34,11 @@ const itemBgColors: Record<string, string> = {
   big_hp_potion: 'bg-rose-500/5',
   gold_scroll: 'bg-yellow-500/5',
   free_skip: 'bg-indigo-500/5',
+  big_exp_scroll: 'bg-cyan-500/5',
+  instant_exp: 'bg-emerald-500/5',
+  big_gold: 'bg-amber-500/5',
+  time_extend: 'bg-orange-500/5',
+  warrior_gauntlet: 'bg-slate-500/5',
 }
 
 const itemBadgeColors: Record<string, string> = {
@@ -39,6 +49,11 @@ const itemBadgeColors: Record<string, string> = {
   big_hp_potion: 'bg-rose-500/20 text-rose-300',
   gold_scroll: 'bg-yellow-500/20 text-yellow-300',
   free_skip: 'bg-indigo-500/20 text-indigo-300',
+  big_exp_scroll: 'bg-cyan-500/20 text-cyan-300',
+  instant_exp: 'bg-emerald-500/20 text-emerald-300',
+  big_gold: 'bg-amber-500/20 text-amber-300',
+  time_extend: 'bg-orange-500/20 text-orange-300',
+  warrior_gauntlet: 'bg-slate-500/20 text-slate-300',
 }
 
 function handleBuy(itemId: string) {

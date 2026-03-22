@@ -5,7 +5,6 @@ import { Icon } from '@iconify/vue'
 import PlayerStatusBar from './components/PlayerStatusBar.vue'
 import BountyCard from './components/BountyCard.vue'
 import ActiveQuestCard from './components/ActiveQuestCard.vue'
-import BossModal from './components/BossModal.vue'
 import ShopModal from './components/ShopModal.vue'
 import { useGameState } from './composables/useGameState'
 import { SHOP_ITEMS, REFRESH_COST } from './constants'
@@ -14,21 +13,16 @@ const {
   player,
   boardQuests,
   activeQuests,
-  bossActive,
-  bossQuest,
   notifications,
   refreshBoard,
   acceptQuest,
   randomAccept,
   completeQuest,
   skipQuest,
-  completeBoss,
-  failBoss,
   buyItem,
   resetPlayer,
   expProgress,
   hpPercent,
-  bossCountdown,
 } = useGameState()
 
 type Tab = 'board' | 'shop'
@@ -52,14 +46,6 @@ function handleComplete(uid: string) {
 
 function handleSkip(uid: string) {
   skipQuest(uid)
-}
-
-function handleBossComplete() {
-  completeBoss()
-}
-
-function handleBossFail() {
-  failBoss()
 }
 
 function handleBuy(itemId: string) {
@@ -99,14 +85,6 @@ function switchTab(tab: Tab) {
         </div>
       </TransitionGroup>
     </div>
-
-    <!-- Boss Modal -->
-    <BossModal
-      :quest="bossQuest"
-      :active="bossActive"
-      @complete="handleBossComplete"
-      @fail="handleBossFail"
-    />
 
     <!-- Main Content -->
     <div class="mx-auto max-w-5xl px-4 pt-20 pb-16">
@@ -159,7 +137,8 @@ function switchTab(tab: Tab) {
         <p class="text-text-secondary text-sm animate-fade-up animate-delay-2">
           Hoàn thành nhiệm vụ thực tế mỗi ngày để nhận thưởng EXP và Vàng.
           <br class="hidden sm:block" />
-          Tích lũy đủ 5 nhiệm vụ để kích hoạt sự kiện BOSS!
+          Mỗi lần <span class="text-accent-amber font-semibold">thăng cấp</span>, một Boss sẽ xuất
+          hiện — đánh bại để nhận thưởng lớn!
         </p>
       </header>
 
@@ -201,7 +180,6 @@ function switchTab(tab: Tab) {
               v-for="quest in activeQuests"
               :key="quest.uid"
               :quest="quest"
-              :boss-locked="bossActive"
               @complete="handleComplete"
               @skip="handleSkip"
             />
@@ -222,7 +200,6 @@ function switchTab(tab: Tab) {
             </button>
             <button
               class="flex items-center gap-2 border border-border-default bg-bg-surface px-4 py-2 font-display text-xs tracking-wide text-text-secondary transition hover:border-accent-sky hover:text-accent-sky"
-              :disabled="bossActive"
               @click="handleRandomAccept"
             >
               <Icon icon="lucide:dice-5" class="size-3.5" />
@@ -230,12 +207,13 @@ function switchTab(tab: Tab) {
             </button>
           </div>
 
-          <!-- Progress to boss -->
-          <div class="flex items-center gap-2 text-xs text-text-dim font-display">
-            <Icon icon="lucide:skull" class="size-3.5 text-red-400/50" />
-            BOSS sau
-            <span class="text-red-400 font-bold">{{ bossCountdown }}</span>
-            nhiệm vụ
+          <!-- Active boss indicator -->
+          <div
+            v-if="activeQuests.some((q) => q.isBoss)"
+            class="flex items-center gap-2 text-xs font-display animate-pulse"
+          >
+            <Icon icon="lucide:skull" class="size-3.5 text-red-400" />
+            <span class="text-red-400 font-bold">BOSS ĐANG CHờ!</span>
           </div>
         </div>
 
@@ -266,7 +244,6 @@ function switchTab(tab: Tab) {
                 v-for="quest in boardQuests"
                 :key="quest.uid"
                 :quest="quest"
-                :disabled="bossActive"
                 @accept="handleAccept"
               />
             </div>

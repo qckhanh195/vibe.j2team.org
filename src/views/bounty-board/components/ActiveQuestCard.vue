@@ -7,7 +7,6 @@ import { RARITY_CONFIG, CATEGORY_CONFIG } from '../constants'
 
 const props = defineProps<{
   quest: ActiveQuest
-  bossLocked?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -46,21 +45,31 @@ function handleSkip() {
 
 <template>
   <div
-    class="relative flex flex-col sm:flex-row items-start sm:items-center gap-3 border-l-4 border border-border-default bg-bg-surface p-4 transition-all"
+    class="relative flex flex-col sm:flex-row items-start sm:items-center gap-3 border-l-4 border bg-bg-surface p-4 transition-all"
     :class="[
       quest.isBoss
-        ? 'border-l-red-500 bg-red-500/5'
-        : rarityConfig.borderClass.replace('border-', 'border-l-'),
+        ? 'border-l-red-500 border-red-500/40 bg-red-500/5'
+        : rarityConfig.borderClass.replace('border-', 'border-l-') + ' border-border-default',
       isExpiring ? 'animate-pulse' : '',
     ]"
   >
+    <!-- Boss glow ring -->
+    <div
+      v-if="quest.isBoss"
+      class="absolute inset-0 pointer-events-none border border-red-500/20 animate-pulse"
+    />
+
     <!-- Category icon -->
     <div
       class="flex-shrink-0 flex size-10 items-center justify-center border"
-      :class="[rarityConfig.borderClass, rarityConfig.bgClass]"
+      :class="
+        quest.isBoss
+          ? 'border-red-500/50 bg-red-500/10'
+          : [rarityConfig.borderClass, rarityConfig.bgClass]
+      "
     >
       <Icon
-        :icon="quest.isBoss ? 'lucide:skull' : quest.icon"
+        :icon="quest.isBoss ? quest.icon : quest.icon"
         class="size-5"
         :class="quest.isBoss ? 'text-red-400' : rarityConfig.textClass"
       />
@@ -75,11 +84,22 @@ function handleSkip() {
         >
           {{ quest.isBoss ? '⚠ BOSS' : rarityConfig.label }}
         </span>
-        <span class="text-xs" :class="categoryConfig.color">{{ categoryConfig.label }}</span>
+        <span v-if="!quest.isBoss" class="text-xs" :class="categoryConfig.color">{{
+          categoryConfig.label
+        }}</span>
+        <span v-if="quest.isBoss" class="text-xs text-red-400/70 font-display"
+          >NHIỆM VỤ ĐẶC BIỆT</span
+        >
       </div>
-      <h4 class="font-display font-semibold text-sm text-text-primary leading-tight truncate">
+      <h4
+        class="font-display font-semibold text-sm leading-tight"
+        :class="quest.isBoss ? 'text-red-300' : 'text-text-primary'"
+      >
         {{ quest.name }}
       </h4>
+      <p v-if="quest.isBoss" class="text-xs text-text-dim mt-0.5 line-clamp-2">
+        {{ quest.description }}
+      </p>
 
       <!-- Progress bar -->
       <div class="mt-2 flex items-center gap-2">
@@ -100,29 +120,52 @@ function handleSkip() {
 
       <!-- Rewards -->
       <div class="mt-1 flex items-center gap-3 text-xs text-text-dim">
-        <span class="flex items-center gap-1">
-          <Icon icon="lucide:star" class="size-3 text-accent-amber" />
-          +{{ quest.exp }} EXP
-        </span>
-        <span class="flex items-center gap-1">
-          <Icon icon="lucide:coins" class="size-3 text-accent-amber" />
-          +{{ quest.gold }} G
-        </span>
-        <span class="flex items-center gap-1">
-          <Icon icon="lucide:heart" class="size-3 text-red-400" />
-          +{{ quest.hpRestore }} HP
-        </span>
+        <!-- Boss: no EXP, show Gold + Full HP -->
+        <template v-if="quest.isBoss">
+          <span class="flex items-center gap-1 text-accent-amber font-semibold">
+            <Icon icon="lucide:coins" class="size-3 text-accent-amber" />
+            +{{ quest.gold }} Gold
+          </span>
+          <span class="flex items-center gap-1 text-red-400 font-semibold">
+            <Icon icon="lucide:heart" class="size-3 text-red-400" />
+            Hồi Đầy Máu
+          </span>
+          <span class="flex items-center gap-1 text-text-dim/60 line-through">
+            <Icon icon="lucide:star" class="size-3" />
+            0 EXP
+          </span>
+        </template>
+        <!-- Normal quest rewards -->
+        <template v-else>
+          <span class="flex items-center gap-1">
+            <Icon icon="lucide:star" class="size-3 text-accent-amber" />
+            +{{ quest.exp }} EXP
+          </span>
+          <span class="flex items-center gap-1">
+            <Icon icon="lucide:coins" class="size-3 text-accent-amber" />
+            +{{ quest.gold }} G
+          </span>
+          <span class="flex items-center gap-1">
+            <Icon icon="lucide:heart" class="size-3 text-red-400" />
+            +{{ quest.hpRestore }} HP
+          </span>
+        </template>
       </div>
     </div>
 
     <!-- Action buttons -->
     <div class="flex gap-2 flex-shrink-0">
       <button
-        class="flex items-center gap-1 border border-accent-coral bg-accent-coral/10 px-3 py-1.5 font-display text-xs text-accent-coral tracking-wide transition hover:bg-accent-coral/20"
+        class="flex items-center gap-1 border px-3 py-1.5 font-display text-xs tracking-wide transition"
+        :class="
+          quest.isBoss
+            ? 'border-red-500 bg-red-500/10 text-red-400 hover:bg-red-500/20'
+            : 'border-accent-coral bg-accent-coral/10 text-accent-coral hover:bg-accent-coral/20'
+        "
         @click="handleComplete"
       >
-        <Icon icon="lucide:check" class="size-3.5" />
-        <span class="hidden sm:inline">Xong</span>
+        <Icon :icon="quest.isBoss ? 'lucide:sword' : 'lucide:check'" class="size-3.5" />
+        <span class="hidden sm:inline">{{ quest.isBoss ? 'Chiến Thắng' : 'Xong' }}</span>
       </button>
       <button
         v-if="!quest.isBoss"

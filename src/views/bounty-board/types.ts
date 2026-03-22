@@ -52,6 +52,9 @@ export interface PlayerState {
   expBoostCharges: number
   maxActiveQuests: number
   freeSkipCharges: number
+  bigExpScrollCharges: number
+  ssLastBossTriggerExp: number
+  shopPurchases: Record<string, number>
 }
 
 export interface ShopItem {
@@ -60,6 +63,7 @@ export interface ShopItem {
   description: string
   price: number
   icon: string
+  maxOwned?: number // optional purchase limit
   effect:
     | 'hp_potion'
     | 'exp_scroll'
@@ -68,6 +72,11 @@ export interface ShopItem {
     | 'big_hp_potion'
     | 'gold_scroll'
     | 'free_skip'
+    | 'big_exp_scroll'
+    | 'big_gold'
+    | 'time_extend'
+    | 'warrior_gauntlet'
+    | 'instant_exp'
 }
 
 export interface RarityConfig {
@@ -96,4 +105,13 @@ export interface Notification {
   id: string
   type: 'success' | 'fail' | 'warning' | 'boss' | 'levelup'
   message: string
+}
+
+export interface BossConfig {
+  name: string
+  description: string
+  icon: string
+  goldReward: number
+  durationMinutes: number
+  failHpLossPercent: number
 }

@@ -1,17 +1,170 @@
-import type { QuestTemplate, RarityConfig, Rarity, RankConfig, Rank, ShopItem } from './types'
+import type {
+  QuestTemplate,
+  RarityConfig,
+  Rarity,
+  RankConfig,
+  Rank,
+  ShopItem,
+  BossConfig,
+} from './types'
 
 export const BOARD_SIZE = 6
 export const REFRESH_COST = 5
-export const BOSS_INTERVAL = 5
+
+// SS Endgame constants
+export const SS_MIN_EXP = 1500 // EXP threshold to reach SS
+export const SS_BOSS_INTERVAL = 300 // Every 300 EXP above SS, a boss appears
+export const SS_MAX_EXP = 3600 // Total EXP cap — game complete!
+
+// Fixed boss quest per rank-up (E → SS), each a specific real-life challenge
+export const BOSS_CONFIG: Partial<Record<Rank, BossConfig>> = {
+  E: {
+    name: '💸 Rải Lộc Bạn Thân',
+    description:
+      'Chuyển khoản 10.000đ cho một người bạn thật sự không cần lý do. Chế giấu đi mà chưa có sục để thực hiện!',
+    icon: 'lucide:hand-coins',
+    goldReward: 50,
+    durationMinutes: 30,
+    failHpLossPercent: 0.25,
+  },
+  D: {
+    name: '🌿 Ra Ngoài Chạm Cỏ',
+    description:
+      'Ra công viên hoặc bãi cỏ, chàn trần đẩm xuống cỏ xanh và ngồi im 10 phút không nhìn điện thoại. Recharge năng lượng!',
+    icon: 'lucide:leaf',
+    goldReward: 90,
+    durationMinutes: 25,
+    failHpLossPercent: 0.3,
+  },
+  C: {
+    name: '📵 Digital Detox 2 Tiếng',
+    description:
+      'Đặt điện thoại vào hộc bàn, không chạm trong 2 giờ liên tiếp. Chứng minh bạn kông nghiện! Kẹt thưe thì thất bại.',
+    icon: 'lucide:smartphone-off',
+    goldReward: 140,
+    durationMinutes: 125,
+    failHpLossPercent: 0.35,
+  },
+  B: {
+    name: '🍳 Tự Nấu Cả Ngày',
+    description:
+      'Tự nấu đủ bữa sáng và bữa trưa hom nay, không gọi đồ ăn ship. Ăn ngon, sống khỏe, tiết kiệm!',
+    icon: 'lucide:chef-hat',
+    goldReward: 200,
+    durationMinutes: 60,
+    failHpLossPercent: 0.4,
+  },
+  A: {
+    name: '🤫 Làm Tốt Ẩn Danh',
+    description:
+      'Giúp đỡ ai đó mà không để họ biết bạn đứng sau — không kể cho bất kỳ ai. Đại Hiệp làm việc không cần được công nhận.',
+    icon: 'lucide:eye-off',
+    goldReward: 280,
+    durationMinutes: 40,
+    failHpLossPercent: 0.4,
+  },
+  S: {
+    name: '🏃 Chạy 5km Không Dừng',
+    description:
+      'Ra ngoài chạy liên tục 5km. Không đi bộ, không dừng. Đây là giới hạn của cơ thể hay của ý chí?',
+    icon: 'lucide:activity',
+    goldReward: 400,
+    durationMinutes: 40,
+    failHpLossPercent: 0.45,
+  },
+  SS: {
+    name: '🔥 24h Không Mạng Xã Hội',
+    description:
+      'Không mở bất kỳ mạng xã hội nào trong 24 giờ. FB, Instagram, TikTok — tất cả phải đóng. Bạn sẽ ngạc nhiên về lượng thời gian mình có!',
+    icon: 'lucide:wifi-off',
+    goldReward: 600,
+    durationMinutes: 60, // honor system — just confirm at end
+    failHpLossPercent: 0.5,
+  },
+}
+
+// Random boss pool for SS rank (after the fixed SS boss)
+export const SS_BOSS_POOL: BossConfig[] = [
+  {
+    name: '🌅 Dậy Sớm Chinh Phục Bình Minh',
+    description:
+      'Đặt báo và thức dậy trước 5:30 sáng, ra ngoài ngắm bình minh. Không được nằm xuống lại!',
+    icon: 'lucide:sunrise',
+    goldReward: 350,
+    durationMinutes: 45,
+    failHpLossPercent: 0.45,
+  },
+  {
+    name: '💸 Rải Lộc Cộng Đồng',
+    description:
+      'Chuyển khoản hoặc mua đồ tặng cho 3 người khác nhau hom nay. Tổng tối thiểu 30.000đ.',
+    icon: 'lucide:hand-heart',
+    goldReward: 380,
+    durationMinutes: 60,
+    failHpLossPercent: 0.45,
+  },
+  {
+    name: '🌿 Chạm Cỏ & Sạc Năng Lượng',
+    description:
+      'Ra ngoài thiên nhiên, cởi giày chạm vào đất/cỏ, ngồi im 15 phút tuyệt đối không nhìn điện thoại.',
+    icon: 'lucide:trees',
+    goldReward: 300,
+    durationMinutes: 30,
+    failHpLossPercent: 0.4,
+  },
+  {
+    name: '📵 Ngày Detox Số',
+    description:
+      'Không mở mạng xã hội (FB/Instagram/TikTok) trong 8 tiếng liên tiếp (khập giờ bất kỳ).',
+    icon: 'lucide:ban',
+    goldReward: 450,
+    durationMinutes: 480,
+    failHpLossPercent: 0.5,
+  },
+  {
+    name: '🏃 Thử Thách Thể Chất Cực Hạn',
+    description: 'Chọn 1 trong 3: Bơi 1km, leo cầu thang 30 tầng, hoặc đạp xe 20km liên tục.',
+    icon: 'lucide:dumbbell',
+    goldReward: 420,
+    durationMinutes: 90,
+    failHpLossPercent: 0.45,
+  },
+  {
+    name: '💌 Hàn Gắn Một Mối Quan Hệ',
+    description:
+      'Chủ động liên hệ ai đó bạn đang bất hòa, nói chuyện thật thành và tìm hướng giải quyết.',
+    icon: 'lucide:handshake',
+    goldReward: 360,
+    durationMinutes: 45,
+    failHpLossPercent: 0.45,
+  },
+  {
+    name: '🎯 Zero To-Do',
+    description: 'Hoàn thành tất cả task trong danh sách todo của ngày hom nay trước 21:00.',
+    icon: 'lucide:check-circle-2',
+    goldReward: 380,
+    durationMinutes: 60,
+    failHpLossPercent: 0.4,
+  },
+  {
+    name: '🍳 Ngày Không Gọi Đồ Ăn',
+    description:
+      'Tự nấu đủ cả 3 bữa sáng, trưa, tối. Không gọi ship bất cứ thứ gì. Ăn ngon, sống khỏe!',
+    icon: 'lucide:utensils',
+    goldReward: 350,
+    durationMinutes: 60,
+    failHpLossPercent: 0.4,
+  },
+]
 
 export const RANK_UP_COSTS: Partial<Record<Rank, number>> = {
-  E: 0,
-  D: 20,
-  C: 50,
-  B: 100,
-  A: 250,
-  S: 500,
-  SS: 1000,
+  E: 0, // F → E: free
+  D: 10, // E → D
+  C: 20, // D → C
+  B: 50, // C → B
+  A: 80, // B → A
+  S: 100, // A → S
+  SS: 200, // S → SS
 }
 
 // ─── Quest Templates ─────────────────────────────────────────────────────────
@@ -1614,14 +1767,14 @@ export const RARITY_CONFIG: Record<Rarity, RarityConfig> = {
 export const RANKS: Rank[] = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS']
 
 export const RANK_CONFIG: RankConfig[] = [
-  { label: 'F', minExp: 0, nextExp: 100, title: 'Lính Mới' },
-  { label: 'E', minExp: 100, nextExp: 300, title: 'Chiến Binh' },
-  { label: 'D', minExp: 300, nextExp: 700, title: 'Kiếm Sĩ' },
-  { label: 'C', minExp: 700, nextExp: 1500, title: 'Dũng Sĩ' },
-  { label: 'B', minExp: 1500, nextExp: 3000, title: 'Hiệp Sĩ' },
-  { label: 'A', minExp: 3000, nextExp: 6000, title: 'Đại Hiệp' },
-  { label: 'S', minExp: 6000, nextExp: 12000, title: 'Huyền Thoại' },
-  { label: 'SS', minExp: 12000, nextExp: null, title: 'Bất Tử' },
+  { label: 'F', minExp: 0, nextExp: 0, title: 'Lính Mới' },
+  { label: 'E', minExp: 0, nextExp: 100, title: 'Chiến Binh' },
+  { label: 'D', minExp: 100, nextExp: 200, title: 'Kiếm Sĩ' },
+  { label: 'C', minExp: 200, nextExp: 500, title: 'Dũng Sĩ' },
+  { label: 'B', minExp: 500, nextExp: 800, title: 'Hiệp Sĩ' },
+  { label: 'A', minExp: 800, nextExp: 1000, title: 'Đại Hiệp' },
+  { label: 'S', minExp: 1000, nextExp: 1500, title: 'Huyền Thoại' },
+  { label: 'SS', minExp: 1500, nextExp: null, title: 'Bất Tử' },
 ]
 
 // ─── Category Config ──────────────────────────────────────────────────────────
@@ -1683,10 +1836,11 @@ export const SHOP_ITEMS: ShopItem[] = [
   {
     id: 'gold_scroll',
     name: 'Cuộn Tài Lộc',
-    description: 'Ngay lập tức nhận được 100 Gold. Đầu tư sinh lời!',
+    description: 'Tăng 20% lượng vàng hiện có. Ví dụ: có 500G → nhận thêm 100G. Mua tối đa 10 lần.',
     price: 80,
     icon: 'lucide:coins',
     effect: 'gold_scroll',
+    maxOwned: 10,
   },
   {
     id: 'free_skip',
@@ -1695,5 +1849,45 @@ export const SHOP_ITEMS: ShopItem[] = [
     price: 35,
     icon: 'lucide:shield-check',
     effect: 'free_skip',
+  },
+  {
+    id: 'big_exp_scroll',
+    name: 'Cuộn Thiên Tài',
+    description: 'EXP ×5 cho nhiệm vụ tiếp theo hoàn thành. Không xếp chồng với Cuộn Thông Thái!',
+    price: 120,
+    icon: 'lucide:brain',
+    effect: 'big_exp_scroll',
+  },
+  {
+    id: 'instant_exp',
+    name: 'Đá Tri Thức',
+    description: 'Nhận ngay lập tức 100 EXP. Không phụ thuộc vào bội số, không cần làm nhiệm vụ!',
+    price: 100,
+    icon: 'lucide:gem',
+    effect: 'instant_exp',
+  },
+  {
+    id: 'big_gold',
+    name: 'Bình Vàng Khổng Lồ',
+    description: 'Ngay lập tức nhận được 250 Gold. Lộc đến như vũ bão!',
+    price: 150,
+    icon: 'lucide:vault',
+    effect: 'big_gold',
+  },
+  {
+    id: 'time_extend',
+    name: 'Đồng Hồ Cát Ma Thuật',
+    description: 'Kéo dài thời gian tất cả nhiệm vụ đang làm thêm 60 phút. Sử dụng khi khẩn cấp!',
+    price: 40,
+    icon: 'lucide:timer-reset',
+    effect: 'time_extend',
+  },
+  {
+    id: 'warrior_gauntlet',
+    name: 'Bao Tay Chiến Binh',
+    description: 'Tăng vĩnh viễn Máu Tối Đa +50 và hồi đầy máu ngay lập tức.',
+    price: 350,
+    icon: 'lucide:shield',
+    effect: 'warrior_gauntlet',
   },
 ]
