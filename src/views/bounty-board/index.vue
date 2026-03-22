@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import PlayerStatusBar from './components/PlayerStatusBar.vue'
 import BountyCard from './components/BountyCard.vue'
@@ -165,21 +164,37 @@ function switchTab(tab: Tab) {
         </p>
       </header>
 
-      <!-- ── Tabs ── -->
-      <div class="mb-6 flex border-b border-border-default animate-fade-up animate-delay-3">
+      <!-- ── Tabs & Actions ── -->
+      <div
+        class="mb-6 flex items-center justify-between border-b border-border-default animate-fade-up animate-delay-3"
+      >
+        <div class="flex">
+          <button
+            v-for="tab in ['board', 'shop'] as Tab[]"
+            :key="tab"
+            class="flex items-center gap-2 border-b-2 px-4 py-3 sm:px-6 font-display text-sm tracking-wide transition-colors"
+            style="margin-bottom: -1px"
+            :class="
+              activeTab === tab
+                ? 'border-accent-coral text-accent-coral'
+                : 'border-transparent text-text-dim hover:text-text-secondary'
+            "
+            @click="switchTab(tab)"
+          >
+            <Icon :icon="tab === 'board' ? 'lucide:scroll' : 'lucide:store'" class="size-4" />
+            <span class="hidden sm:inline">{{
+              tab === 'board' ? 'Bảng Nhiệm Vụ' : 'Cửa Hàng'
+            }}</span>
+            <span class="sm:hidden">{{ tab === 'board' ? 'Nhiệm Vụ' : 'Shop' }}</span>
+          </button>
+        </div>
+
         <button
-          v-for="tab in ['board', 'shop'] as Tab[]"
-          :key="tab"
-          class="flex items-center gap-2 border-b-2 px-6 py-3 font-display text-sm tracking-wide transition-colors"
-          :class="
-            activeTab === tab
-              ? 'border-accent-coral text-accent-coral'
-              : 'border-transparent text-text-dim hover:text-text-secondary'
-          "
-          @click="switchTab(tab)"
+          class="flex items-center gap-1.5 px-4 text-xs text-text-dim/60 transition hover:text-accent-coral"
+          @click="handleReset"
         >
-          <Icon :icon="tab === 'board' ? 'lucide:scroll' : 'lucide:store'" class="size-4" />
-          {{ tab === 'board' ? 'Bảng Nhiệm Vụ' : 'Cửa Hàng' }}
+          <Icon icon="lucide:rotate-ccw" class="size-3" />
+          <span class="hidden sm:inline">Reset nhân vật</span>
         </button>
       </div>
 
@@ -213,7 +228,7 @@ function switchTab(tab: Tab) {
         <div
           class="flex flex-wrap items-center justify-between gap-3 animate-fade-up animate-delay-1"
         >
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <button
               class="flex items-center gap-2 border border-border-default bg-bg-surface px-4 py-2 font-display text-xs tracking-wide text-text-secondary transition hover:border-accent-amber hover:text-accent-amber"
               @click="handleRefreshBoard"
@@ -228,6 +243,25 @@ function switchTab(tab: Tab) {
               <Icon icon="lucide:dice-5" class="size-3.5" />
               Nhận Ngẫu Nhiên
             </button>
+            <div
+              class="ml-1 sm:ml-4 flex items-center gap-4 font-display text-[11px] tracking-widest text-text-dim"
+            >
+              <span class="flex items-center">
+                HOÀN THÀNH:<span class="ml-1.5 font-bold text-accent-coral text-sm">{{
+                  player.completedCount
+                }}</span>
+              </span>
+              <span class="flex items-center">
+                BỎ QUA:<span class="ml-1.5 font-bold text-accent-amber text-sm">{{
+                  player.skippedCount ?? 0
+                }}</span>
+              </span>
+              <span class="flex items-center">
+                DIỆT BOSS:<span class="ml-1.5 font-bold text-red-500 text-sm">{{
+                  player.bossesDefeated ?? 0
+                }}</span>
+              </span>
+            </div>
           </div>
 
           <!-- Active boss indicator -->
@@ -272,43 +306,6 @@ function switchTab(tab: Tab) {
             </div>
           </div>
         </section>
-
-        <!-- ── Quest Stats ── -->
-        <section class="animate-fade-up animate-delay-3">
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div class="border border-border-default bg-bg-surface p-4 text-center">
-              <div class="font-display text-[10px] tracking-widest text-text-dim mb-1">
-                HOÀN THÀNH
-              </div>
-              <div class="font-display text-2xl font-bold text-accent-coral">
-                {{ player.completedCount }}
-              </div>
-            </div>
-            <div class="border border-border-default bg-bg-surface p-4 text-center">
-              <div class="font-display text-[10px] tracking-widest text-text-dim mb-1">
-                TỔNG EXP
-              </div>
-              <div class="font-display text-2xl font-bold text-accent-amber">
-                {{ player.exp }}
-              </div>
-            </div>
-            <div class="border border-border-default bg-bg-surface p-4 text-center">
-              <div class="font-display text-[10px] tracking-widest text-text-dim mb-1">VÀNG</div>
-              <div class="font-display text-2xl font-bold text-accent-amber">
-                {{ player.gold }}
-              </div>
-            </div>
-            <div class="border border-border-default bg-bg-surface p-4 text-center">
-              <div class="font-display text-[10px] tracking-widest text-text-dim mb-1">MÁU</div>
-              <div
-                class="font-display text-2xl font-bold"
-                :class="hpPercent > 50 ? 'text-red-400' : 'text-red-600'"
-              >
-                {{ player.hp }}/{{ player.maxHp }}
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
 
       <!-- ════════════════════════════════════════════════════════════════ -->
@@ -330,27 +327,6 @@ function switchTab(tab: Tab) {
 
         <ShopModal :player="player" :items="SHOP_ITEMS" @buy="handleBuy" />
       </div>
-
-      <!-- ── Footer ── -->
-      <footer
-        class="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-border-default pt-6 animate-fade-up animate-delay-4"
-      >
-        <RouterLink
-          to="/"
-          class="flex items-center gap-2 text-sm text-text-dim transition hover:text-text-primary"
-        >
-          <Icon icon="lucide:arrow-left" class="size-4" />
-          Về trang chủ
-        </RouterLink>
-
-        <button
-          class="flex items-center gap-2 text-xs text-text-dim/50 transition hover:text-accent-coral"
-          @click="handleReset"
-        >
-          <Icon icon="lucide:rotate-ccw" class="size-3" />
-          Reset nhân vật
-        </button>
-      </footer>
     </div>
   </div>
 </template>

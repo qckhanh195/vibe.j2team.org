@@ -71,6 +71,8 @@ const defaultPlayer: PlayerState = {
   gold: 30,
   rank: 'E',
   completedCount: 0,
+  skippedCount: 0,
+  bossesDefeated: 0,
   expBoostCharges: 0,
   maxActiveQuests: 3,
   freeSkipCharges: 0,
@@ -95,6 +97,8 @@ export function useGameState() {
   if (player.value.bigExpScrollCharges === undefined) player.value.bigExpScrollCharges = 0
   if (player.value.ssLastBossTriggerExp === undefined) player.value.ssLastBossTriggerExp = 0
   if (!player.value.shopPurchases) player.value.shopPurchases = {}
+  if (player.value.skippedCount === undefined) player.value.skippedCount = 0
+  if (player.value.bossesDefeated === undefined) player.value.bossesDefeated = 0
 
   function pushNotif(type: Notification['type'], message: string) {
     const id = generateUid()
@@ -304,6 +308,7 @@ export function useGameState() {
       const gold = quest.gold
       player.value.gold += gold
       player.value.hp = player.value.maxHp
+      player.value.bossesDefeated++
       activeQuests.value.splice(idx, 1)
       pushNotif('boss', `🏆 BOSS ĐÃ BẠI! +${gold} Gold + Hồi Đầy Máu!`)
       return
@@ -357,6 +362,7 @@ export function useGameState() {
 
     if ((player.value.freeSkipCharges ?? 0) > 0) {
       player.value.freeSkipCharges = (player.value.freeSkipCharges ?? 1) - 1
+      player.value.skippedCount++
       activeQuests.value.splice(idx, 1)
       pushNotif(
         'success',
@@ -371,6 +377,7 @@ export function useGameState() {
     player.value.hp = Math.max(0, player.value.hp - hpLoss)
     player.value.gold = Math.max(0, player.value.gold - goldLoss)
     player.value.exp = Math.max(0, player.value.exp - expLoss)
+    player.value.skippedCount++
     activeQuests.value.splice(idx, 1)
     pushNotif('warning', `⏩ Bỏ qua: ${quest.name} — −${hpLoss} HP, −${goldLoss} Gold`)
   }

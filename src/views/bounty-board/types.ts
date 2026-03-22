@@ -49,6 +49,8 @@ export interface PlayerState {
   gold: number
   rank: Rank
   completedCount: number
+  skippedCount: number
+  bossesDefeated: number
   expBoostCharges: number
   maxActiveQuests: number
   freeSkipCharges: number

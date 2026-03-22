@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import type { PlayerState } from '../types'
 import { RANK_CONFIG } from '../constants'
@@ -43,6 +44,23 @@ const hpBarColor = computed(() => {
   >
     <div class="mx-auto max-w-5xl px-3 py-2">
       <div class="flex items-center gap-2 sm:gap-4">
+        <!-- Home Button -->
+        <RouterLink
+          to="/"
+          class="group flex h-10 flex-shrink-0 items-center justify-center gap-2 border border-border-default bg-bg-surface px-3 transition hover:border-accent-amber hover:bg-accent-amber/5 sm:h-12 sm:px-4"
+          title="Về Trang Chủ"
+        >
+          <Icon
+            icon="lucide:home"
+            class="size-4 sm:size-5 text-text-dim transition-colors group-hover:text-accent-amber"
+          />
+          <span
+            class="hidden font-display text-xs font-bold tracking-wider text-text-secondary transition-colors group-hover:text-accent-amber sm:block"
+          >
+            TRANG CHỦ
+          </span>
+        </RouterLink>
+
         <!-- Rank Badge -->
         <div class="flex-shrink-0">
           <div
