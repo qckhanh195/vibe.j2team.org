@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import PlayerStatusBar from './components/PlayerStatusBar.vue'
 import BountyCard from './components/BountyCard.vue'
 import ActiveQuestCard from './components/ActiveQuestCard.vue'
 import ShopModal from './components/ShopModal.vue'
+import RankUpModal from './components/RankUpModal.vue'
+import GameCompleteModal from './components/GameCompleteModal.vue'
 import { useGameState } from './composables/useGameState'
 import { SHOP_ITEMS, REFRESH_COST } from './constants'
 
@@ -14,6 +16,8 @@ const {
   boardQuests,
   activeQuests,
   notifications,
+  rankUpEvent,
+  clearRankUpEvent,
   refreshBoard,
   acceptQuest,
   randomAccept,
@@ -23,10 +27,17 @@ const {
   resetPlayer,
   expProgress,
   hpPercent,
+  isGameComplete,
 } = useGameState()
 
 type Tab = 'board' | 'shop'
 const activeTab = ref<Tab>('board')
+
+// Game complete modal — dismissed when user chooses "Chơi Tiếp"
+const gameCompleteDismissed = ref(false)
+watch(isGameComplete, (val) => {
+  if (!val) gameCompleteDismissed.value = false
+})
 
 function handleRefreshBoard() {
   refreshBoard()
@@ -54,6 +65,7 @@ function handleBuy(itemId: string) {
 
 function handleReset() {
   resetPlayer()
+  gameCompleteDismissed.value = false
 }
 
 function switchTab(tab: Tab) {
@@ -65,6 +77,17 @@ function switchTab(tab: Tab) {
   <div class="min-h-screen bg-bg-deep text-text-primary font-body">
     <!-- Player Status Bar (fixed top) -->
     <PlayerStatusBar :player="player" :exp-progress="expProgress" :hp-percent="hpPercent" />
+
+    <!-- Rank-Up Popup -->
+    <RankUpModal :event="rankUpEvent" @close="clearRankUpEvent" />
+
+    <!-- Game Complete Popup -->
+    <GameCompleteModal
+      v-if="isGameComplete && !gameCompleteDismissed"
+      :player="player"
+      @continue="gameCompleteDismissed = true"
+      @reset="handleReset"
+    />
 
     <!-- Notifications -->
     <div class="fixed top-[60px] right-4 z-50 flex flex-col gap-2 w-72 pointer-events-none">
