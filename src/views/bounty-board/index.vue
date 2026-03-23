@@ -158,7 +158,7 @@ function switchTab(tab: Tab) {
             <div class="flex items-center justify-center gap-2 mt-1">
               <div class="h-px flex-1 bg-accent-amber/30" />
               <span class="font-display text-[10px] tracking-[0.2em] text-text-dim"
-                >QUEST BOARD</span
+                >BOUNTY BOARD</span
               >
               <div class="h-px flex-1 bg-accent-amber/30" />
             </div>
