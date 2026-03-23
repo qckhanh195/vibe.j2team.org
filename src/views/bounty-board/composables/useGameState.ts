@@ -10,22 +10,25 @@ import type {
   Rank,
   Notification,
   BossConfig,
+  ShopItem,
 } from '../types'
 import {
-  AVAILABLE_QUESTS,
   RARITY_CONFIG,
   RARITIES,
   RANK_CONFIG,
   RANK_UP_COSTS,
-  SHOP_ITEMS,
   BOARD_SIZE,
   REFRESH_COST,
-  BOSS_CONFIG,
-  SS_BOSS_POOL,
   SS_BOSS_INTERVAL,
   SS_MAX_EXP,
   SS_MIN_EXP,
 } from '../constants'
+
+export const isDataLoaded = ref(false)
+export let AVAILABLE_QUESTS: QuestTemplate[] = []
+export let SHOP_ITEMS: ShopItem[] = []
+export let BOSS_CONFIG: Partial<Record<Rank, BossConfig>> = {}
+export let SS_BOSS_POOL: BossConfig[] = []
 
 function randFrom<T>(arr: T[]): T {
   const item = arr[Math.floor(Math.random() * arr.length)]
@@ -88,6 +91,25 @@ export function useGameState() {
 
   const notifications = ref<Notification[]>([])
 
+  async function initGameData() {
+    if (isDataLoaded.value) return
+    try {
+      const res = await fetch('/bounty-board/data.json')
+      const data = await res.json()
+      AVAILABLE_QUESTS = data.quests || []
+      SHOP_ITEMS = data.shopItems || []
+      BOSS_CONFIG = data.bossConfig || {}
+      SS_BOSS_POOL = data.ssBossPool || []
+
+      if (boardQuests.value.length === 0) {
+        fillBoard()
+      }
+      isDataLoaded.value = true
+    } catch (err) {
+      console.error('Lỗi tải dữ liệu Hội Thợ Săn:', err)
+    }
+  }
+
   // Popup state for rank-up event
   const rankUpEvent = ref<{ rank: Rank; boss: BossConfig } | null>(null)
 
@@ -125,8 +147,6 @@ export function useGameState() {
     const templates = pickUniqueTemplates(BOARD_SIZE, excluded)
     boardQuests.value = templates.map((t) => buildQuestFromTemplate(t, rollRarity()))
   }
-
-  if (boardQuests.value.length === 0) fillBoard()
 
   function refreshBoard(force = false) {
     if (!force) {
@@ -547,5 +567,7 @@ export function useGameState() {
     currentRankConfig,
     isGameComplete,
     ssProgress,
+    isDataLoaded,
+    initGameData,
   }
 }

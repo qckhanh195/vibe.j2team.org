@@ -7,8 +7,8 @@ import ActiveQuestCard from './components/ActiveQuestCard.vue'
 import ShopModal from './components/ShopModal.vue'
 import RankUpModal from './components/RankUpModal.vue'
 import GameCompleteModal from './components/GameCompleteModal.vue'
-import { useGameState } from './composables/useGameState'
-import { SHOP_ITEMS, REFRESH_COST } from './constants'
+import { useGameState, SHOP_ITEMS } from './composables/useGameState'
+import { REFRESH_COST } from './constants'
 
 const {
   player,
@@ -27,7 +27,11 @@ const {
   expProgress,
   hpPercent,
   isGameComplete,
+  isDataLoaded,
+  initGameData,
 } = useGameState()
+
+initGameData()
 
 type Tab = 'board' | 'shop'
 const activeTab = ref<Tab>('board')
@@ -73,7 +77,17 @@ function switchTab(tab: Tab) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-bg-deep text-text-primary font-body">
+  <div
+    v-if="!isDataLoaded"
+    class="flex min-h-screen items-center justify-center bg-bg-deep text-text-primary"
+  >
+    <Icon icon="lucide:loader-2" class="animate-spin size-8 text-accent-amber" />
+    <span class="ml-2 font-display tracking-widest text-text-secondary"
+      >Đang tải dữ liệu Hội Thợ Săn...</span
+    >
+  </div>
+
+  <div v-else class="min-h-screen bg-bg-deep text-text-primary font-body">
     <!-- Player Status Bar (fixed top) -->
     <PlayerStatusBar :player="player" :exp-progress="expProgress" :hp-percent="hpPercent" />
 
