@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useClipboard, useEventListener, useIntervalFn, useWindowSize } from '@vueuse/core'
-import type { BlindMazeStats, MazeData, MazePoint, TrailPoint } from './types'
+import type { BlindMazeStats, MazeData, MazeEvent, MazePoint, TrailPoint } from './types'
 import { formatTime, getDateKey, getTodaysMaze } from './utils'
 import {
   getShareText,
@@ -34,7 +34,6 @@ const trail = ref<TrailPoint[]>([])
 const moves = ref(0)
 const gameComplete = ref(false)
 const completionTime = ref<number | null>(null)
-const visibilityRadius = ref(4)
 const isRevealActive = ref(false)
 const sosCooldownUntil = ref(0)
 const nowTick = ref(Date.now())
@@ -50,6 +49,10 @@ const cellSize = 14
 const wallWidth = 4
 const buffer = 1
 const trailDuration = 8000
+const defaultVisibilityRadius = 4
+const beaconUntil = ref(0)
+const snareUntil = ref(0)
+const echoUntil = ref(0)
 const colors = {
   background: '#08111A',
   wall: '#F4E6C8',
@@ -87,11 +90,34 @@ const canShare = computed(() => gameComplete.value && completionTime.value !== n
 const recentHistory = computed(() => [...stats.value.history].slice(-5).reverse())
 const playedToday = computed(() => hasPlayedToday() && !isHistoricalGame.value)
 const isSosLocked = computed(() => isRevealActive.value || nowTick.value < sosCooldownUntil.value)
+const isEchoActive = computed(() => nowTick.value < echoUntil.value)
+const visibilityRadius = computed(() => {
+  if (gameComplete.value || isRevealActive.value) return 1000
+
+  let radius = defaultVisibilityRadius
+  if (nowTick.value < beaconUntil.value) radius += 3
+  if (nowTick.value < snareUntil.value) radius = Math.max(2, radius - 2)
+  return radius
+})
+const activeEffects = computed(() => {
+  const effects: string[] = []
+  if (nowTick.value < beaconUntil.value) effects.push('Beacon +3 tầm nhìn')
+  if (nowTick.value < snareUntil.value) effects.push('Snare -2 tầm nhìn')
+  if (isEchoActive.value) effects.push('Echo đang chỉ hướng')
+  return effects
+})
 const sosCountdown = computed(() => {
   const remainingMs = sosCooldownUntil.value - nowTick.value
   if (remainingMs <= 0) return 0
   return Math.ceil(remainingMs / 1000)
 })
+const eventLegend = [
+  { label: 'A/B', text: 'Cổng dịch chuyển cố định (đi A → ra B)', color: 'text-accent-amber' },
+  { label: '?', text: 'Cổng bí ẩn — dùng 1 lần, đến ô ngẫu nhiên', color: 'text-accent-sky' },
+  { label: '+', text: 'Beacon — tăng tầm nhìn tạm thời', color: 'text-green-400' },
+  { label: '!', text: 'Snare — giảm tầm nhìn tạm thời', color: 'text-red-400' },
+  { label: '>', text: 'Echo (nhìn xa hơn) hoặc Surge (dịch chuyển)', color: 'text-accent-coral' },
+]
 
 function formatLocalDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -123,19 +149,25 @@ const canvasDisplayStyle = computed(() => {
   const canvasWidth = mazeData.width * cellSize + wallWidth
   const canvasHeight = mazeData.height * cellSize + wallWidth
   const isDesktop = windowWidth.value >= 1024
-  const horizontalPadding = windowWidth.value >= 640 ? 48 : 32
-  const reservedColumns = isDesktop ? 420 + 24 : 0
-  const maxWidth = Math.max(260, windowWidth.value - horizontalPadding - reservedColumns)
-  const maxHeight = Math.max(260, windowHeight.value - 200)
+  const isWideDesktop = windowWidth.value >= 1440
+  const pagePadding = isDesktop ? 48 : 24
+  const cardPadding = isDesktop ? 36 : 20
+  const cardBorder = 2
+  const reservedColumns = isDesktop ? (isWideDesktop ? 460 : 420) + 24 : 0
+  const availableWidth =
+    windowWidth.value - pagePadding - cardPadding - cardBorder - reservedColumns
+  const maxWidth = Math.max(220, availableWidth)
+  const verticalReserve = isDesktop ? 232 : 164
+  const maxHeight = Math.max(260, windowHeight.value - verticalReserve)
   const scale = Math.min(maxWidth / canvasWidth, maxHeight / canvasHeight, 1)
-  const size = Math.floor(Math.min(canvasWidth * scale, canvasHeight * scale))
+  const width = Math.floor(canvasWidth * scale)
+  const height = Math.floor(canvasHeight * scale)
 
   return {
-    width: `${size}px`,
-    height: `${size}px`,
+    width: `${width}px`,
+    height: `${height}px`,
     maxWidth: '100%',
-    maxHeight: 'calc(100vh - 200px)',
-    aspectRatio: '1 / 1',
+    maxHeight: isDesktop ? 'calc(100vh - 232px)' : 'calc(100vh - 164px)',
     margin: '0 auto',
   }
 })
@@ -155,12 +187,128 @@ function stopTimer() {
   pauseTimer()
 }
 
+function getPointKey(point: MazePoint): string {
+  return `${point.x},${point.y}`
+}
+
+function setTimedMessage(value: string, duration = 2200) {
+  message.value = value
+  window.clearTimeout(messageTimeout)
+  messageTimeout = window.setTimeout(() => {
+    message.value = ''
+  }, duration)
+}
+
+function touchTrailPoint(point: MazePoint, time = Date.now()) {
+  const existing = trail.value.find((item) => item.x === point.x && item.y === point.y)
+  if (existing) existing.time = time
+  else trail.value.push({ ...point, time })
+  trail.value = trail.value.filter((item) => time - item.time < trailDuration)
+}
+
+function getCurrentEvent(): MazeEvent | null {
+  if (!maze.value) return null
+  return maze.value.events[getPointKey(playerPos.value)] ?? null
+}
+
+function clearConsumableEvent(point = playerPos.value) {
+  if (!maze.value) return
+  delete maze.value.events[getPointKey(point)]
+}
+
+function applyTimedPenalty(seconds: number) {
+  sessionStartTime -= seconds * 1000
+  timerDisplay.value = formatTime(getElapsedTime())
+}
+
+function moveDirectlyTo(point: MazePoint, countsAsMove: boolean) {
+  playerPos.value = { ...point }
+  if (countsAsMove) moves.value++
+  touchTrailPoint(point)
+}
+
+function refreshNearbyTrail(center: MazePoint) {
+  const now = Date.now()
+  for (let y = center.y - 2; y <= center.y + 2; y++) {
+    for (let x = center.x - 2; x <= center.x + 2; x++) {
+      const distance = Math.abs(x - center.x) + Math.abs(y - center.y)
+      if (distance > 2) continue
+      touchTrailPoint({ x, y }, now)
+    }
+  }
+}
+
+function isAtExit(): boolean {
+  return (
+    !!maze.value && playerPos.value.x === maze.value.end.x && playerPos.value.y === maze.value.end.y
+  )
+}
+
+function triggerCellEvent(dx: number, dy: number, chainDepth: number) {
+  const mazeData = maze.value
+  if (!mazeData || gameComplete.value || chainDepth > 3) return
+
+  const event = getCurrentEvent()
+  if (!event) return
+
+  switch (event.type) {
+    case 'teleport-pair':
+      if (event.target) {
+        playerPos.value = { ...event.target }
+        playerVisualPos.value = { ...event.target }
+        touchTrailPoint(event.target)
+        setTimedMessage(`Cổng ${event.pairId ?? ''} kéo bạn sang một nhánh khác.`)
+      }
+      break
+    case 'teleport-mystery':
+      clearConsumableEvent()
+      if (event.target) {
+        playerPos.value = { ...event.target }
+        playerVisualPos.value = { ...event.target }
+        touchTrailPoint(event.target)
+        setTimedMessage('Cổng bí ẩn vừa ném bạn tới một góc rất xa.')
+      }
+      break
+    case 'beacon':
+      clearConsumableEvent()
+      beaconUntil.value = Date.now() + 7000
+      setTimedMessage('Beacon sáng lên, vùng nhìn của bạn mở rộng.')
+      break
+    case 'snare':
+      clearConsumableEvent()
+      snareUntil.value = Date.now() + 6500
+      applyTimedPenalty(4)
+      setTimedMessage('Snare siết sương mù lại và cộng thêm 4 giây áp lực.')
+      break
+    case 'echo':
+      clearConsumableEvent()
+      echoUntil.value = Date.now() + 5000
+      setTimedMessage('Echo vang lên, lối ra hiện hướng trong chốc lát.')
+      break
+    case 'trail-refresh':
+      clearConsumableEvent()
+      refreshNearbyTrail(playerPos.value)
+      setTimedMessage('Dấu chân quanh bạn sáng lại, dễ lần đường hơn.')
+      break
+    case 'surge':
+      clearConsumableEvent()
+      setTimedMessage('Surge đẩy bạn lao thêm một ô cùng hướng.')
+      if ((dx !== 0 || dy !== 0) && canMoveTo(playerPos.value.x + dx, playerPos.value.y + dy)) {
+        movePlayer(dx, dy, chainDepth + 1, false)
+      }
+      break
+  }
+}
+
 function initGame() {
   stopTimer()
   cancelAnimationFrame(animationFrame)
   window.clearTimeout(revealTimeout)
   isRevealActive.value = false
   sosCooldownUntil.value = 0
+  beaconUntil.value = 0
+  snareUntil.value = 0
+  echoUntil.value = 0
   nowTick.value = Date.now()
 
   const selectedDate = currentDate.value
@@ -174,7 +322,6 @@ function initGame() {
     playerPos.value = { ...maze.value.end }
     playerVisualPos.value = { ...maze.value.end }
     trail.value = []
-    visibilityRadius.value = 1000
     moves.value = todayData?.moves ?? 0
     completionTime.value = todayData?.time ?? null
     timerDisplay.value = formatTime(todayData?.time ?? 0)
@@ -190,7 +337,6 @@ function initGame() {
     message.value = ''
     gameComplete.value = false
     completionTime.value = null
-    visibilityRadius.value = 4
     startTimer()
   }
 
@@ -221,26 +367,23 @@ function canMoveTo(x: number, y: number): boolean {
   return true
 }
 
-function movePlayer(dx: number, dy: number) {
+function movePlayer(dx: number, dy: number, chainDepth = 0, countsAsMove = true) {
   if (gameComplete.value) return
 
   const nextX = playerPos.value.x + dx
   const nextY = playerPos.value.y + dy
   if (!canMoveTo(nextX, nextY)) return
 
-  playerPos.value = { x: nextX, y: nextY }
-  moves.value++
+  moveDirectlyTo({ x: nextX, y: nextY }, countsAsMove)
 
-  const now = Date.now()
-  const existing = trail.value.find((item) => item.x === nextX && item.y === nextY)
-  if (existing) existing.time = now
-  else trail.value.push({ x: nextX, y: nextY, time: now })
-
-  trail.value = trail.value.filter((item) => now - item.time < trailDuration)
-
-  if (maze.value && nextX === maze.value.end.x && nextY === maze.value.end.y) {
+  if (isAtExit()) {
     handleVictory()
+    return
   }
+
+  triggerCellEvent(dx, dy, chainDepth)
+
+  if (isAtExit()) handleVictory()
 }
 
 function handleVictory() {
@@ -356,10 +499,95 @@ function draw() {
     }
   }
 
+  drawEvents(ctx)
   drawTrail(ctx)
   drawPlayer(ctx)
   drawGoalArrow(ctx, canvas)
   drawFog(ctx, canvas)
+}
+
+function drawEvents(ctx: CanvasRenderingContext2D) {
+  const mazeData = maze.value
+  if (!mazeData) return
+
+  ctx.save()
+
+  for (const [key, event] of Object.entries(mazeData.events)) {
+    const [xText, yText] = key.split(',')
+    const x = Number(xText)
+    const y = Number(yText)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue
+
+    const distance = getDistance(x, y, playerPos.value.x, playerPos.value.y)
+    if (distance > visibilityRadius.value + 1.5) continue
+
+    const px = x * cellSize + wallWidth
+    const py = y * cellSize + wallWidth
+    const centerX = px + (cellSize - wallWidth) / 2
+    const centerY = py + (cellSize - wallWidth) / 2
+    const size = cellSize - wallWidth - 4
+
+    ctx.fillStyle = 'rgba(8, 17, 26, 0.5)'
+    ctx.fillRect(px + 2, py + 2, size, size)
+
+    switch (event.type) {
+      case 'teleport-pair':
+        ctx.strokeStyle = event.pairId === 'A' ? '#FFB830' : '#38BDF8'
+        ctx.lineWidth = 1.5
+        ctx.strokeRect(px + 2, py + 2, size, size)
+        ctx.fillStyle = event.pairId === 'A' ? '#FFB830' : '#38BDF8'
+        ctx.font = 'bold 10px sans-serif'
+        ctx.fillText(event.pairId ?? 'T', centerX - 3.5, centerY + 3.5)
+        break
+      case 'teleport-mystery':
+        ctx.fillStyle = '#FF6B4A'
+        ctx.font = 'bold 11px sans-serif'
+        ctx.fillText('?', centerX - 3, centerY + 4)
+        break
+      case 'beacon':
+        ctx.fillStyle = '#FFB830'
+        ctx.beginPath()
+        ctx.arc(centerX, centerY, 3.5, 0, Math.PI * 2)
+        ctx.fill()
+        break
+      case 'snare':
+        ctx.strokeStyle = '#FF6B4A'
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.moveTo(px + 3, py + 3)
+        ctx.lineTo(px + size + 1, py + size + 1)
+        ctx.moveTo(px + size + 1, py + 3)
+        ctx.lineTo(px + 3, py + size + 1)
+        ctx.stroke()
+        break
+      case 'echo':
+        ctx.strokeStyle = '#38BDF8'
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.moveTo(px + 3, centerY)
+        ctx.lineTo(px + size + 1, centerY)
+        ctx.lineTo(px + size - 2, centerY - 3)
+        ctx.moveTo(px + size + 1, centerY)
+        ctx.lineTo(px + size - 2, centerY + 3)
+        ctx.stroke()
+        break
+      case 'trail-refresh':
+        ctx.fillStyle = '#38BDF8'
+        ctx.fillRect(centerX - 3, centerY - 3, 6, 6)
+        break
+      case 'surge':
+        ctx.fillStyle = '#FF6B4A'
+        ctx.beginPath()
+        ctx.moveTo(centerX - 3, centerY - 4)
+        ctx.lineTo(centerX + 4, centerY)
+        ctx.lineTo(centerX - 3, centerY + 4)
+        ctx.closePath()
+        ctx.fill()
+        break
+    }
+  }
+
+  ctx.restore()
 }
 
 function drawTrail(ctx: CanvasRenderingContext2D) {
@@ -407,7 +635,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D) {
 
 function drawGoalArrow(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const mazeData = maze.value
-  if (!mazeData || !isRevealActive.value) return
+  if (!mazeData || (!isRevealActive.value && !isEchoActive.value)) return
 
   const targetX = mazeData.end.x * cellSize + wallWidth + (cellSize - wallWidth) / 2
   const targetY = mazeData.end.y * cellSize + wallWidth + (cellSize - wallWidth) / 2
@@ -442,7 +670,7 @@ function drawGoalArrow(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement)
   try {
     ctx.strokeStyle = colors.goalArrow
     ctx.fillStyle = colors.goalArrow
-    ctx.lineWidth = 3
+    ctx.lineWidth = isRevealActive.value ? 3 : 2
     ctx.lineCap = 'round'
 
     ctx.beginPath()
@@ -463,8 +691,10 @@ function drawGoalArrow(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement)
     ctx.closePath()
     ctx.fill()
 
-    ctx.font = 'bold 11px sans-serif'
-    ctx.fillText('EXIT', baseX - Math.cos(angle) * 18 - 12, baseY - Math.sin(angle) * 18 - 8)
+    if (isRevealActive.value) {
+      ctx.font = 'bold 11px sans-serif'
+      ctx.fillText('EXIT', baseX - Math.cos(angle) * 18 - 12, baseY - Math.sin(angle) * 18 - 8)
+    }
   } finally {
     ctx.restore()
   }
@@ -529,15 +759,12 @@ function startRenderLoop() {
 
 function revealMaze() {
   if (isSosLocked.value || gameComplete.value) return
-  const saved = visibilityRadius.value
   isRevealActive.value = true
   sosCooldownUntil.value = Date.now() + 60000
   sessionStartTime -= 10000
   timerDisplay.value = formatTime(getElapsedTime())
-  visibilityRadius.value = 1000
   window.clearTimeout(revealTimeout)
   revealTimeout = window.setTimeout(() => {
-    visibilityRadius.value = saved
     isRevealActive.value = false
   }, 1500)
 }
@@ -550,11 +777,7 @@ async function handleShare() {
     completionTime.value ?? getElapsedTime(),
   )
   await copy(text)
-  message.value = 'Đã copy kết quả'
-  window.clearTimeout(messageTimeout)
-  messageTimeout = window.setTimeout(() => {
-    message.value = ''
-  }, 2000)
+  setTimedMessage('Đã copy kết quả', 2000)
 }
 
 function moveUp() {
@@ -642,14 +865,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative min-h-screen overflow-hidden bg-bg-deep px-4 py-2 text-text-primary sm:px-6">
+  <div class="relative min-h-screen overflow-hidden bg-bg-deep px-3 py-2 text-text-primary sm:px-6">
     <img
       :src="logoUrl"
       alt="J2TEAMlogo"
       class="pointer-events-none absolute right-3 top-3 z-0 w-28 rotate-12 opacity-70 mix-blend-screen drop-shadow-[0_0_18px_rgba(255,107,74,0.18)] sm:right-5 sm:top-4 sm:w-36 md:w-44"
       style="filter: brightness(0) invert(1)"
     />
-    <div class="mx-auto flex w-full max-w-[1320px] flex-col gap-2">
+    <div class="mx-auto flex w-full max-w-[1360px] flex-col gap-2.5 lg:min-h-[calc(100vh-1rem)]">
       <div class="animate-fade-up">
         <RouterLink
           to="/"
@@ -660,128 +883,208 @@ onUnmounted(() => {
       </div>
 
       <div class="animate-fade-up animate-delay-1 text-center">
-        <h1 class="font-display text-4xl font-bold tracking-tight sm:text-5xl">
+        <h1 class="font-display text-3xl font-bold tracking-tight sm:text-5xl">
           <span
             class="bg-gradient-to-r from-accent-coral to-accent-amber bg-clip-text text-transparent"
           >
             Blind Maze
           </span>
           <span
-            class="ml-2 inline-flex -translate-y-1 items-center border border-border-default bg-bg-surface px-2 py-0.5 text-[11px] font-display tracking-wide text-text-secondary"
+            class="ml-1 inline-flex translate-y-0 items-center border border-border-default bg-bg-surface px-2 py-0.5 text-[10px] font-display tracking-wide text-text-secondary sm:ml-2 sm:-translate-y-1 sm:text-[11px]"
           >
             v1.0.1
           </span>
         </h1>
-        <p class="mt-1 text-sm text-text-secondary sm:text-base">
+        <p class="mt-1 text-xs text-text-secondary sm:text-base">
           Đi trong mê cung phủ sương mù và tìm đường ra trước khi lạc hướng.
         </p>
       </div>
 
       <div
-        class="grid gap-2 lg:grid-cols-[210px_minmax(0,1fr)_210px] lg:items-start xl:grid-cols-[230px_minmax(0,1fr)_230px]"
+        class="grid gap-2 lg:flex-1 lg:grid-cols-[200px_minmax(0,1fr)_200px] lg:items-start lg:overflow-hidden xl:grid-cols-[220px_minmax(0,1fr)_220px]"
       >
         <aside
-          class="min-w-0 overflow-hidden border border-border-default bg-bg-surface p-3 animate-fade-up animate-delay-2"
+          class="order-2 min-w-0 border border-border-default bg-bg-surface animate-fade-up animate-delay-2 lg:order-none lg:self-stretch lg:overflow-y-auto"
         >
-          <h2
-            class="mb-2.5 flex items-center gap-3 font-display text-xl font-semibold text-text-primary"
-          >
-            <span class="text-sm tracking-widest text-accent-coral">//</span>
-            Hướng dẫn
-          </h2>
+          <details class="group lg:hidden">
+            <summary
+              class="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 font-display text-sm font-semibold text-text-primary"
+            >
+              <span class="flex items-center gap-2">
+                <span class="tracking-widest text-accent-coral">//</span>
+                Hướng dẫn nhanh
+              </span>
+              <span class="text-xs text-text-dim transition group-open:rotate-45">+</span>
+            </summary>
 
-          <div class="space-y-3 text-sm text-text-secondary">
-            <div class="space-y-1.5">
-              <p class="text-text-primary">Điều khiển (PC)</p>
-              <p class="text-[11px] text-text-secondary">
-                Khuyến nghị chơi trên PC để điều khiển chính xác hơn.
-              </p>
-              <div class="flex flex-wrap items-center gap-1.5">
-                <span
-                  class="border border-border-default bg-bg-elevated px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
-                  >↑</span
+            <div class="border-t border-border-default px-3 pb-3 pt-2">
+              <div class="space-y-3 text-xs leading-relaxed text-text-secondary">
+                <div>
+                  <p class="mb-1.5 font-display text-[10px] tracking-[0.15em] text-text-dim">
+                    ĐIỀU KHIỂN
+                  </p>
+                  <div class="flex flex-wrap items-center gap-1">
+                    <span
+                      class="border border-border-default bg-bg-elevated px-1.5 py-0.5 font-display text-[10px] text-text-primary"
+                      >↑↓←→</span
+                    >
+                    <span class="text-text-dim">/</span>
+                    <span
+                      class="border border-border-default bg-bg-elevated px-1.5 py-0.5 font-display text-[10px] text-text-primary"
+                      >WASD</span
+                    >
+                  </div>
+                  <p class="mt-1 text-[11px] text-text-dim">Mobile: chạm hoặc dùng D-pad</p>
+                </div>
+
+                <div>
+                  <p class="mb-1 font-display text-[10px] tracking-[0.15em] text-text-dim">
+                    MỤC TIÊU
+                  </p>
+                  <p>
+                    Tìm đường thoát mê cung trong sương mù. Sương mù giới hạn tầm nhìn nên bạn chỉ
+                    thấy vùng rất gần.
+                  </p>
+                </div>
+
+                <div>
+                  <p class="mb-1 font-display text-[10px] tracking-[0.15em] text-text-dim">SOS</p>
+                  <p>
+                    Nhấn <span class="font-display text-text-primary">SOS</span> để mở bản đồ toàn
+                    bộ trong vài giây, đổi lại sẽ bị cộng phạt thời gian.
+                  </p>
+                </div>
+
+                <div class="border-t border-border-default pt-3">
+                  <p class="mb-2 font-display text-[10px] tracking-[0.15em] text-accent-coral">
+                    EVENTS
+                  </p>
+                  <div class="space-y-1.5">
+                    <div
+                      v-for="item in eventLegend"
+                      :key="item.label"
+                      class="flex items-start gap-2"
+                    >
+                      <span
+                        class="mt-0.5 inline-flex shrink-0 items-center justify-center border border-border-default bg-bg-elevated px-1 py-0.5 font-display text-[10px] leading-none text-text-primary"
+                        :style="{ minWidth: item.label.length > 1 ? '1.75rem' : '1.25rem' }"
+                      >
+                        {{ item.label }}
+                      </span>
+                      <span :class="['text-[11px] leading-snug', item.color]">{{ item.text }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <p
+                  v-if="isHistoricalGame"
+                  class="border-t border-border-default pt-2 text-text-dim"
                 >
-                <span
-                  class="border border-border-default bg-bg-elevated px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
-                  >↓</span
-                >
-                <span
-                  class="border border-border-default bg-bg-elevated px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
-                  >←</span
-                >
-                <span
-                  class="border border-border-default bg-bg-elevated px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
-                  >→</span
-                >
-                <span class="mx-1 text-text-dim">hoặc</span>
-                <span
-                  class="border border-border-default bg-bg-elevated px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
-                  >W</span
-                >
-                <span
-                  class="border border-border-default bg-bg-elevated px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
-                  >A</span
-                >
-                <span
-                  class="border border-border-default bg-bg-elevated px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
-                  >S</span
-                >
-                <span
-                  class="border border-border-default bg-bg-elevated px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
-                  >D</span
-                >
+                  Đang chơi mê cung ngày {{ currentDate }}.
+                </p>
               </div>
             </div>
+          </details>
 
-            <div class="space-y-1.5">
-              <p class="text-text-primary">Điều khiển (điện thoại)</p>
-              <p>
-                Chạm vào <span class="text-text-primary">ô kề</span> để di chuyển, hoặc dùng
-                <span class="text-text-primary">d-pad</span> bên dưới mê cung.
+          <div class="hidden p-3 lg:block">
+            <h2
+              class="mb-3 flex items-center gap-2 font-display text-sm font-semibold text-text-primary"
+            >
+              <span class="tracking-widest text-accent-coral">//</span>
+              Hướng dẫn
+            </h2>
+
+            <div class="space-y-3 text-xs leading-relaxed text-text-secondary">
+              <div>
+                <p class="mb-1.5 font-display text-[10px] tracking-[0.15em] text-text-dim">
+                  ĐIỀU KHIỂN
+                </p>
+                <div class="flex flex-wrap items-center gap-1">
+                  <span
+                    class="border border-border-default bg-bg-elevated px-1.5 py-0.5 font-display text-[10px] text-text-primary"
+                    >↑↓←→</span
+                  >
+                  <span class="text-text-dim">/</span>
+                  <span
+                    class="border border-border-default bg-bg-elevated px-1.5 py-0.5 font-display text-[10px] text-text-primary"
+                    >WASD</span
+                  >
+                </div>
+                <p class="mt-1 text-[11px] text-text-dim">Mobile: chạm hoặc dùng D-pad</p>
+              </div>
+
+              <div>
+                <p class="mb-1 font-display text-[10px] tracking-[0.15em] text-text-dim">
+                  MỤC TIÊU
+                </p>
+                <p>
+                  Tìm đường thoát mê cung trong sương mù. Sương mù giới hạn tầm nhìn — chỉ thấy các
+                  ô xung quanh.
+                </p>
+              </div>
+
+              <div>
+                <p class="mb-1 font-display text-[10px] tracking-[0.15em] text-text-dim">SOS</p>
+                <p>
+                  Nhấn <span class="font-display text-text-primary">SOS</span> để mở bản đồ toàn bộ
+                  trong vài giây. Có phạt cộng thêm thời gian.
+                </p>
+              </div>
+
+              <div class="border-t border-border-default pt-3">
+                <p class="mb-2 font-display text-[10px] tracking-[0.15em] text-accent-coral">
+                  EVENTS
+                </p>
+                <div class="space-y-1.5">
+                  <div v-for="item in eventLegend" :key="item.label" class="flex items-start gap-2">
+                    <span
+                      class="mt-0.5 inline-flex shrink-0 items-center justify-center border border-border-default bg-bg-elevated px-1 py-0.5 font-display text-[10px] leading-none text-text-primary"
+                      :style="{ minWidth: item.label.length > 1 ? '1.75rem' : '1.25rem' }"
+                    >
+                      {{ item.label }}
+                    </span>
+                    <span :class="['text-[11px] leading-snug', item.color]">{{ item.text }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <p v-if="isHistoricalGame" class="border-t border-border-default pt-2 text-text-dim">
+                Đang chơi mê cung ngày {{ currentDate }}.
               </p>
             </div>
-
-            <div class="space-y-1.5">
-              <p class="text-text-primary">Cơ chế</p>
-              <p>Sương mù chỉ cho bạn nhìn thấy một vùng nhỏ quanh nhân vật.</p>
-              <p>
-                Nhấn <span class="text-text-primary">SOS</span> để hiện mê cung trong thời gian ngắn
-                (có hồi lại).
-              </p>
-            </div>
-
-            <p v-if="isHistoricalGame" class="text-text-dim">
-              Bạn đang chơi mê cung ngày {{ currentDate }}.
-            </p>
           </div>
         </aside>
 
-        <section class="flex min-w-0 justify-center animate-fade-up animate-delay-3">
+        <section
+          class="order-1 flex min-w-0 justify-center overflow-hidden animate-fade-up animate-delay-3 lg:order-none lg:self-stretch"
+        >
           <div
-            class="mx-auto inline-flex max-w-full flex-col overflow-hidden border border-border-default bg-bg-surface p-3 sm:p-4"
+            class="mx-auto flex w-full min-w-0 max-w-full flex-col overflow-hidden border border-border-default bg-bg-surface p-2.5 sm:p-4 lg:self-stretch"
           >
             <div class="mb-2 flex justify-center">
               <div
-                class="inline-flex max-w-full flex-wrap items-center justify-center gap-1.5 border border-accent-coral/40 bg-bg-deep px-2 py-1.5"
+                class="grid w-full max-w-full gap-1.5 border border-accent-coral/40 bg-bg-deep px-2 py-2 sm:inline-flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-center sm:py-1.5"
               >
-                <div class="text-[11px] text-text-secondary sm:text-xs">
+                <div class="text-center text-[10px] text-text-secondary sm:text-xs">
                   <span class="mr-2 text-accent-coral">//</span>Mê cung #{{ mazeNumber }}
                 </div>
-                <div class="flex flex-wrap items-center justify-center gap-2">
+                <div
+                  class="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-2"
+                >
                   <div
-                    class="border border-border-default bg-bg-surface px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
+                    class="border border-border-default bg-bg-surface px-2 py-1 text-center text-[10px] font-display tracking-wide text-text-primary sm:text-[11px]"
                   >
                     <span class="text-text-dim">Time</span>
                     <span class="ml-2 text-accent-amber">{{ timerDisplay }}</span>
                   </div>
                   <div
-                    class="border border-border-default bg-bg-surface px-2 py-1 text-[11px] font-display tracking-wide text-text-primary"
+                    class="border border-border-default bg-bg-surface px-2 py-1 text-center text-[10px] font-display tracking-wide text-text-primary sm:text-[11px]"
                   >
                     <span class="text-text-dim">Moves</span>
                     <span class="ml-2 text-accent-coral">{{ moves }}</span>
                   </div>
                   <button
-                    class="border border-border-default bg-bg-surface px-2 py-1 text-[11px] font-display tracking-wide text-text-primary transition hover:border-accent-coral hover:text-accent-coral"
+                    class="border border-border-default bg-bg-surface px-2 py-1 text-[10px] font-display tracking-wide text-text-primary transition hover:border-accent-coral hover:text-accent-coral sm:text-[11px]"
                     @click="showCalendar = true"
                   >
                     Chọn ngày
@@ -789,7 +1092,7 @@ onUnmounted(() => {
                   <button
                     :disabled="isSosLocked"
                     :class="[
-                      'border px-2 py-1 text-[11px] font-display tracking-wide transition',
+                      'border px-2 py-1 text-[10px] font-display tracking-wide transition sm:text-[11px]',
                       isSosLocked
                         ? 'cursor-not-allowed border-border-default bg-bg-surface text-text-dim opacity-60'
                         : 'border-accent-coral bg-bg-elevated text-accent-coral hover:bg-accent-coral hover:text-bg-deep',
@@ -798,12 +1101,18 @@ onUnmounted(() => {
                   >
                     {{ sosCountdown > 0 ? `SOS ${sosCountdown}` : 'SOS' }}
                   </button>
+                  <div
+                    v-if="activeEffects.length"
+                    class="col-span-2 border border-accent-sky/40 bg-bg-surface px-2 py-1 text-center text-[10px] font-display tracking-wide text-accent-sky sm:text-[11px]"
+                  >
+                    {{ activeEffects.join(' · ') }}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div class="flex justify-center overflow-hidden">
-              <div class="inline-block shrink-0 overflow-hidden">
+            <div class="flex min-w-0 justify-center overflow-hidden">
+              <div class="max-w-full overflow-hidden">
                 <canvas
                   ref="canvasRef"
                   class="block cursor-pointer"
@@ -813,19 +1122,25 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <div class="mt-4 grid grid-cols-3 gap-2 sm:hidden">
+            <div class="mt-3 grid grid-cols-3 gap-1.5 sm:hidden">
               <div />
-              <button class="border border-border-default bg-bg-elevated py-3" @click="moveUp">
+              <button
+                class="border border-border-default bg-bg-elevated py-2.5 text-lg"
+                @click="moveUp"
+              >
                 ▲
               </button>
               <div />
-              <button class="border border-border-default bg-bg-elevated py-3" @click="moveLeft">
+              <button
+                class="border border-border-default bg-bg-elevated py-2.5 text-lg"
+                @click="moveLeft"
+              >
                 ◀
               </button>
               <button
                 :disabled="isSosLocked"
                 :class="[
-                  'py-3',
+                  'py-2.5 text-sm font-display',
                   isSosLocked
                     ? 'cursor-not-allowed border border-border-default bg-bg-surface text-text-dim opacity-60'
                     : 'border border-border-default bg-bg-surface text-text-dim',
@@ -834,33 +1149,41 @@ onUnmounted(() => {
               >
                 {{ sosCountdown > 0 ? `SOS ${sosCountdown}` : 'SOS' }}
               </button>
-              <button class="border border-border-default bg-bg-elevated py-3" @click="moveRight">
+              <button
+                class="border border-border-default bg-bg-elevated py-2.5 text-lg"
+                @click="moveRight"
+              >
                 ▶
               </button>
               <div />
-              <button class="border border-border-default bg-bg-elevated py-3" @click="moveDown">
+              <button
+                class="border border-border-default bg-bg-elevated py-2.5 text-lg"
+                @click="moveDown"
+              >
                 ▼
               </button>
               <div />
             </div>
 
             <div
-              class="mt-3 flex flex-wrap items-center justify-center gap-3 border-t border-border-default pt-3"
+              class="mt-2.5 flex flex-wrap items-center justify-center gap-2 border-t border-border-default pt-2.5"
             >
               <button
                 v-if="canShare"
-                class="px-2 py-1 text-sm font-display text-text-secondary transition hover:text-accent-coral"
+                class="px-2 py-1 text-xs font-display text-text-secondary transition hover:text-accent-coral sm:text-sm"
                 @click="handleShare"
               >
                 Chia sẻ
               </button>
             </div>
 
-            <p class="mt-2 text-center text-sm text-text-dim">{{ message }}</p>
+            <p class="mt-2 min-h-[1.25rem] text-center text-xs text-text-dim sm:text-sm">
+              {{ message }}
+            </p>
 
             <p
               v-if="playedToday && gameComplete"
-              class="mt-2 text-center text-xs text-accent-amber"
+              class="mt-2 text-center text-[11px] text-accent-amber sm:text-xs"
             >
               Bạn đã hoàn thành mê cung hôm nay. Có thể xem lại hoặc chơi mê cung ngày khác.
             </p>
@@ -868,66 +1191,147 @@ onUnmounted(() => {
         </section>
 
         <aside
-          class="min-w-0 overflow-hidden border border-border-default bg-bg-surface p-3 animate-fade-up animate-delay-4"
+          class="order-3 min-w-0 border border-border-default bg-bg-surface animate-fade-up animate-delay-4 lg:order-none lg:self-stretch lg:overflow-y-auto"
         >
-          <h2
-            class="mb-2.5 flex items-center gap-3 font-display text-xl font-semibold text-text-primary"
-          >
-            <span class="text-sm tracking-widest text-accent-coral">//</span>
-            Thống kê
-          </h2>
+          <details class="group lg:hidden">
+            <summary
+              class="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 font-display text-sm font-semibold text-text-primary"
+            >
+              <span class="flex items-center gap-2">
+                <span class="tracking-widest text-accent-coral">//</span>
+                Thống kê
+              </span>
+              <span class="text-xs text-text-dim transition group-open:rotate-45">+</span>
+            </summary>
 
-          <div class="border border-border-default bg-bg-elevated p-4">
-            <div class="mb-3 text-xs font-display tracking-wide text-text-dim">THỐNG KÊ LOCAL</div>
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              <div class="border border-border-default bg-bg-surface p-3">
-                <div class="text-xs text-text-dim">Đã chơi</div>
-                <div class="mt-1 font-display text-2xl text-text-primary">
-                  {{ stats.mazesPlayed }}
+            <div class="border-t border-border-default px-3 pb-3 pt-2">
+              <div class="border border-border-default bg-bg-elevated p-2.5">
+                <div class="mb-1.5 text-[10px] font-display tracking-[0.15em] text-text-dim">
+                  THỐNG KÊ LOCAL
                 </div>
-              </div>
-              <div class="border border-border-default bg-bg-surface p-3">
-                <div class="text-xs text-text-dim">Đã thoát</div>
-                <div class="mt-1 font-display text-2xl text-accent-amber">{{ stats.mazesWon }}</div>
-              </div>
-              <div class="border border-border-default bg-bg-surface p-3">
-                <div class="text-xs text-text-dim">Best Moves</div>
-                <div class="mt-1 font-display text-xl text-text-primary">
-                  {{ stats.bestMoves ?? '-' }}
-                </div>
-              </div>
-              <div class="border border-border-default bg-bg-surface p-3">
-                <div class="text-xs text-text-dim">Best Time</div>
-                <div class="mt-1 font-display text-xl text-text-primary">
-                  {{ stats.bestTime !== null ? formatTime(stats.bestTime) : '-' }}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-4 border border-border-default bg-bg-elevated p-4">
-            <div class="mb-3 text-xs font-display tracking-wide text-text-dim">LỊCH SỬ GẦN ĐÂY</div>
-            <div v-if="recentHistory.length" class="space-y-2">
-              <div
-                v-for="entry in recentHistory"
-                :key="`${entry.date}-${entry.mazeNumber}`"
-                class="flex items-center justify-between border border-border-default bg-bg-surface px-3 py-2 text-xs"
-              >
-                <div>
-                  <div class="font-display text-text-primary">#{{ entry.mazeNumber }}</div>
-                  <div class="mt-1 text-text-dim">{{ entry.date }}</div>
-                </div>
-                <div class="text-right">
-                  <div :class="entry.won ? 'text-accent-amber' : 'text-text-secondary'">
-                    {{ entry.won ? 'Escaped' : 'Failed' }}
+                <div class="grid grid-cols-2 gap-1.5">
+                  <div class="border border-border-default bg-bg-surface p-2">
+                    <div class="text-[11px] text-text-dim">Đã chơi</div>
+                    <div class="mt-0.5 font-display text-lg text-text-primary">
+                      {{ stats.mazesPlayed }}
+                    </div>
                   </div>
-                  <div class="mt-1 text-text-dim">
-                    {{ entry.moves }} bước · {{ formatTime(entry.time) }}
+                  <div class="border border-border-default bg-bg-surface p-2">
+                    <div class="text-[11px] text-text-dim">Đã thoát</div>
+                    <div class="mt-0.5 font-display text-lg text-accent-amber">
+                      {{ stats.mazesWon }}
+                    </div>
+                  </div>
+                  <div class="border border-border-default bg-bg-surface p-2">
+                    <div class="text-[11px] text-text-dim">Best Moves</div>
+                    <div class="mt-0.5 font-display text-base text-text-primary">
+                      {{ stats.bestMoves ?? '-' }}
+                    </div>
+                  </div>
+                  <div class="border border-border-default bg-bg-surface p-2">
+                    <div class="text-[11px] text-text-dim">Best Time</div>
+                    <div class="mt-0.5 font-display text-base text-text-primary">
+                      {{ stats.bestTime !== null ? formatTime(stats.bestTime) : '-' }}
+                    </div>
                   </div>
                 </div>
               </div>
+
+              <div class="mt-2 border border-border-default bg-bg-elevated p-2.5">
+                <div class="mb-1.5 text-[10px] font-display tracking-[0.15em] text-text-dim">
+                  LỊCH SỬ GẦN ĐÂY
+                </div>
+                <div v-if="recentHistory.length" class="space-y-1">
+                  <div
+                    v-for="entry in recentHistory"
+                    :key="`${entry.date}-${entry.mazeNumber}`"
+                    class="flex items-center justify-between border border-border-default bg-bg-surface px-2 py-1.5 text-[11px]"
+                  >
+                    <div>
+                      <div class="font-display text-text-primary">#{{ entry.mazeNumber }}</div>
+                      <div class="text-text-dim">{{ entry.date }}</div>
+                    </div>
+                    <div class="text-right">
+                      <div :class="entry.won ? 'text-accent-amber' : 'text-text-secondary'">
+                        {{ entry.won ? 'Escaped' : 'Failed' }}
+                      </div>
+                      <div class="text-text-dim">
+                        {{ entry.moves }}b · {{ formatTime(entry.time) }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="text-[11px] text-text-dim">Chưa có lịch sử.</p>
+              </div>
             </div>
-            <p v-else class="text-sm text-text-dim">Chưa có lịch sử chơi nào.</p>
+          </details>
+
+          <div class="hidden p-3 lg:block">
+            <h2
+              class="mb-2 flex items-center gap-2 font-display text-sm font-semibold text-text-primary"
+            >
+              <span class="tracking-widest text-accent-coral">//</span>
+              Thống kê
+            </h2>
+
+            <div class="border border-border-default bg-bg-elevated p-2.5">
+              <div class="mb-1.5 text-[10px] font-display tracking-[0.15em] text-text-dim">
+                THỐNG KÊ LOCAL
+              </div>
+              <div class="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-1">
+                <div class="border border-border-default bg-bg-surface p-2">
+                  <div class="text-[11px] text-text-dim">Đã chơi</div>
+                  <div class="mt-0.5 font-display text-xl text-text-primary">
+                    {{ stats.mazesPlayed }}
+                  </div>
+                </div>
+                <div class="border border-border-default bg-bg-surface p-2">
+                  <div class="text-[11px] text-text-dim">Đã thoát</div>
+                  <div class="mt-0.5 font-display text-xl text-accent-amber">
+                    {{ stats.mazesWon }}
+                  </div>
+                </div>
+                <div class="border border-border-default bg-bg-surface p-2">
+                  <div class="text-[11px] text-text-dim">Best Moves</div>
+                  <div class="mt-0.5 font-display text-lg text-text-primary">
+                    {{ stats.bestMoves ?? '-' }}
+                  </div>
+                </div>
+                <div class="border border-border-default bg-bg-surface p-2">
+                  <div class="text-[11px] text-text-dim">Best Time</div>
+                  <div class="mt-0.5 font-display text-lg text-text-primary">
+                    {{ stats.bestTime !== null ? formatTime(stats.bestTime) : '-' }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-2 border border-border-default bg-bg-elevated p-2.5">
+              <div class="mb-1.5 text-[10px] font-display tracking-[0.15em] text-text-dim">
+                LỊCH SỬ GẦN ĐÂY
+              </div>
+              <div v-if="recentHistory.length" class="space-y-1">
+                <div
+                  v-for="entry in recentHistory"
+                  :key="`${entry.date}-${entry.mazeNumber}`"
+                  class="flex items-center justify-between border border-border-default bg-bg-surface px-2 py-1.5 text-[11px]"
+                >
+                  <div>
+                    <div class="font-display text-text-primary">#{{ entry.mazeNumber }}</div>
+                    <div class="text-text-dim">{{ entry.date }}</div>
+                  </div>
+                  <div class="text-right">
+                    <div :class="entry.won ? 'text-accent-amber' : 'text-text-secondary'">
+                      {{ entry.won ? 'Escaped' : 'Failed' }}
+                    </div>
+                    <div class="text-text-dim">
+                      {{ entry.moves }}b · {{ formatTime(entry.time) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="text-[11px] text-text-dim">Chưa có lịch sử.</p>
+            </div>
           </div>
         </aside>
       </div>

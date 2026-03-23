@@ -16,7 +16,7 @@ export const getWeaponStats = (typeId: number, level: number) => {
     damage = 10
   if (typeId === 0) {
     rays = 1
-    damage = 15 + level * 5
+    damage = 25 + level * 8 // Đã tăng sát thương Ion Laser
   } else if (typeId === 1) {
     rays = Math.min(1 + Math.floor(level / 2), 20)
     damage = 8 + level * 3
@@ -43,7 +43,7 @@ export const getWeaponStats = (typeId: number, level: number) => {
     damage = 40 + level * 15
   } else if (typeId === 9) {
     rays = Math.min(3 + Math.floor(level / 3) * 2, 5)
-    damage = 10 + level * 2
+    damage = 20 + level * 5 // Đã tăng sát thương Shotgun
   }
   return { rays, damage }
 }
