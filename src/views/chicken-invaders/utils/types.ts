@@ -38,12 +38,21 @@ export interface Enemy extends GameObject {
 export interface Boss extends Enemy {
   bossType: number
   direction: number
-  state: 'idle' | 'dash' | 'burst' | 'laser_warning' | 'laser_firing' | 'circle_burst'
+  state:
+    | 'idle'
+    | 'dash'
+    | 'burst'
+    | 'laser_warning'
+    | 'laser_firing'
+    | 'circle_burst'
+    | 'meteor_shower'
+    | 'chicken_rain'
   stateTimer: number
   burstCount?: number
   laserTimer?: number
   laserX?: number
-  laserXs?: number[] // Hỗ trợ bắn nhiều tia laser cùng lúc
+  laserXs?: number[]
+  deathTimer?: number
 }
 
 export interface Egg extends GameObject {
@@ -71,4 +80,34 @@ export interface LeaderboardEntry {
   wave: number
   difficulty: string
   date: number
+  mode: 'endless' | 'campaign'
+}
+
+export interface SaveSlot {
+  id: string
+  name: string
+  date: number
+  score: number
+  lives: number
+  currentWave: number
+  weaponType: number
+  weaponLevel: number
+  difficulty: 'easy' | 'normal' | 'hard' | 'hardcore'
+  gameMode?: 'endless' | 'campaign'
+}
+
+export interface GameEngine {
+  pendingSpawns: Enemy[]
+  hazardSpawnCooldown: number
+  formationCenter: { x: number; y: number; dx: number }
+  formationTimer: number
+  formationType: number
+  objCounter: number
+  lastFireTime: number
+  enemyDirection: number
+  wasSpaceDown: boolean
+  isTransitioningWave: boolean
+  hasSpawnedBoss: boolean
+  waveEnemySpeed: number
+  waveEggFireRate: number
 }

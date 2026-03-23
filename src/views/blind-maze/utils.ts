@@ -1,4 +1,4 @@
-import type { BlindMazeStats, MazeCell, MazeData, TodayResult } from './types'
+import type { BlindMazeStats, MazeCell, MazeData, MazeEvent, MazePoint, TodayResult } from './types'
 
 class SeededRandom {
   constructor(private seed: number) {}
@@ -112,6 +112,99 @@ function pickEndPoint(width: number, height: number, rng: SeededRandom) {
   return { x: width - 1, y: height - 1 }
 }
 
+function getPointKey(point: MazePoint): string {
+  return `${point.x},${point.y}`
+}
+
+function getManhattanDistance(from: MazePoint, to: MazePoint): number {
+  return Math.abs(from.x - to.x) + Math.abs(from.y - to.y)
+}
+
+function pickEventPoints(
+  width: number,
+  height: number,
+  rng: SeededRandom,
+  start: MazePoint,
+  end: MazePoint,
+  total: number,
+): MazePoint[] {
+  const candidates: MazePoint[] = []
+  const reserved = new Set([getPointKey(start), getPointKey(end)])
+  const startThreshold = Math.floor((width + height) * 0.22)
+  const endThreshold = Math.floor((width + height) * 0.12)
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const point = { x, y }
+      const key = getPointKey(point)
+      if (reserved.has(key)) continue
+      if (x <= 2 && y <= 2) continue
+      if (getManhattanDistance(start, point) < startThreshold) continue
+      if (getManhattanDistance(end, point) < endThreshold) continue
+      candidates.push(point)
+    }
+  }
+
+  rng.shuffle(candidates)
+  return candidates.slice(0, total)
+}
+
+function createEventMap(
+  width: number,
+  height: number,
+  rng: SeededRandom,
+  start: MazePoint,
+  end: MazePoint,
+): Record<string, MazeEvent> {
+  const eventPoints = pickEventPoints(width, height, rng, start, end, 9)
+  const events: Record<string, MazeEvent> = {}
+  const assignEvent = (point: MazePoint | undefined, event: MazeEvent) => {
+    if (!point) return
+    events[getPointKey(point)] = event
+  }
+
+  const pairA1 = eventPoints[0]
+  const pairA2 = eventPoints[1]
+  const pairB1 = eventPoints[2]
+  const pairB2 = eventPoints[3]
+  const mysteryA = eventPoints[4]
+  const beacon = eventPoints[5]
+  const snare = eventPoints[6]
+  const echo = eventPoints[7]
+  const support = eventPoints[8]
+
+  if (pairA1 && pairA2) {
+    assignEvent(pairA1, { type: 'teleport-pair', pairId: 'A', target: pairA2 })
+    assignEvent(pairA2, { type: 'teleport-pair', pairId: 'A', target: pairA1 })
+  }
+
+  if (pairB1 && pairB2) {
+    assignEvent(pairB1, { type: 'teleport-pair', pairId: 'B', target: pairB2 })
+    assignEvent(pairB2, { type: 'teleport-pair', pairId: 'B', target: pairB1 })
+  }
+
+  const mysteryTargets = eventPoints.filter(
+    (point) => point && point !== mysteryA && getManhattanDistance(point, mysteryA ?? start) >= 12,
+  )
+  if (mysteryA && mysteryTargets.length) {
+    assignEvent(mysteryA, {
+      type: 'teleport-mystery',
+      target: mysteryTargets[0],
+      used: false,
+    })
+  }
+
+  assignEvent(beacon, { type: 'beacon' })
+  assignEvent(snare, { type: 'snare' })
+  assignEvent(echo, { type: 'echo' })
+
+  if (support) {
+    assignEvent(support, rng.next() > 0.5 ? { type: 'trail-refresh' } : { type: 'surge' })
+  }
+
+  return events
+}
+
 export function getTodaysMaze(dateString: string | null = null): MazeData {
   const seed = getDailySeed(dateString)
   const rng = new SeededRandom(seed + 12345)
@@ -119,17 +212,20 @@ export function getTodaysMaze(dateString: string | null = null): MazeData {
   const width = 40 + sizeVariant
   const height = 40 + sizeVariant
   const cells = createCells(width, height)
+  const start = { x: 0, y: 0 }
   const end = pickEndPoint(width, height, rng)
 
-  carveMaze(cells, 0, 0, rng)
+  carveMaze(cells, start.x, start.y, rng)
+  const events = createEventMap(width, height, rng, start, end)
 
   return {
     cells,
     width,
     height,
-    start: { x: 0, y: 0 },
+    start,
     end,
     mazeNumber: getMazeNumber(dateString),
+    events,
   }
 }
 

@@ -15,6 +15,22 @@ export interface MazePoint {
   y: number
 }
 
+export type MazeEventType =
+  | 'teleport-pair'
+  | 'teleport-mystery'
+  | 'beacon'
+  | 'snare'
+  | 'echo'
+  | 'trail-refresh'
+  | 'surge'
+
+export interface MazeEvent {
+  type: MazeEventType
+  target?: MazePoint
+  pairId?: string
+  used?: boolean
+}
+
 export interface MazeData {
   cells: MazeCell[][]
   width: number
@@ -22,6 +38,7 @@ export interface MazeData {
   start: MazePoint
   end: MazePoint
   mazeNumber: number
+  events: Record<string, MazeEvent>
 }
 
 export interface TrailPoint extends MazePoint {
