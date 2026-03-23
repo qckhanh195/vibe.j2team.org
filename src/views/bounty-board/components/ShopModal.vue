@@ -41,21 +41,6 @@ const itemBgColors: Record<string, string> = {
   warrior_gauntlet: 'bg-slate-500/5',
 }
 
-const itemBadgeColors: Record<string, string> = {
-  hp_potion: 'bg-red-500/20 text-red-400',
-  exp_scroll: 'bg-accent-amber/20 text-accent-amber',
-  dragon_heart: 'bg-violet-500/20 text-violet-300',
-  quest_slot: 'bg-teal-500/20 text-teal-300',
-  big_hp_potion: 'bg-rose-500/20 text-rose-300',
-  gold_scroll: 'bg-yellow-500/20 text-yellow-300',
-  free_skip: 'bg-indigo-500/20 text-indigo-300',
-  big_exp_scroll: 'bg-cyan-500/20 text-cyan-300',
-  instant_exp: 'bg-emerald-500/20 text-emerald-300',
-  big_gold: 'bg-amber-500/20 text-amber-300',
-  time_extend: 'bg-orange-500/20 text-orange-300',
-  warrior_gauntlet: 'bg-slate-500/20 text-slate-300',
-}
-
 function handleBuy(itemId: string) {
   emit('buy', itemId)
 }
@@ -98,12 +83,12 @@ function canAfford(item: ShopItem) {
           canAfford(item) ? 'hover:-translate-y-0.5' : 'opacity-60',
         ]"
       >
-        <!-- Item badge -->
+        <!-- Item price badge -->
         <div
-          class="absolute -top-2 left-3 px-2 py-0.5 font-display text-[10px] tracking-widest"
-          :class="itemBadgeColors[item.effect] ?? 'bg-bg-elevated text-text-dim'"
+          class="absolute z-10 -top-3 -right-2 flex items-center gap-1 bg-accent-amber px-2.5 py-1 font-display text-xs font-bold tracking-wider text-bg-deep shadow-md shadow-accent-amber/20"
         >
-          {{ item.price }} GOLD
+          <Icon icon="lucide:coins" class="size-3.5" />
+          {{ item.price }}
         </div>
 
         <!-- Item icon + name -->

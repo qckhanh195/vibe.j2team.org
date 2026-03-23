@@ -123,7 +123,7 @@ function switchTab(tab: Tab) {
     </div>
 
     <!-- Main Content -->
-    <div class="mx-auto max-w-5xl px-4 pt-20 pb-16">
+    <div class="mx-auto max-w-5xl px-4 pt-28 sm:pt-32 pb-16">
       <!-- ── Page Header ── -->
       <header class="mb-8 text-center animate-fade-up">
         <!-- Board sign decoration -->
