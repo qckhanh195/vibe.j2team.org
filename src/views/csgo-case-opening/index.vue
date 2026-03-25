@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useEventListener, useIntervalFn } from '@vueuse/core'
 
 // ══════════ TYPES ══════════
 type RarityKey = 'mil-spec' | 'restricted' | 'classified' | 'covert' | 'knife'
@@ -388,7 +389,6 @@ const particles = ref<{ id: number; x: number; y: number }[]>([])
 let _pid = 0
 
 const botCount = ref(0)
-let _botInt: ReturnType<typeof setInterval> | null = null
 
 const reelItems = ref<InvItem[]>(genReel())
 const spinning = ref(false)
@@ -656,16 +656,13 @@ function playReveal(rarity: RarityKey) {
   }
 }
 
+useEventListener(window, 'keydown', onKey)
+useIntervalFn(() => {
+  for (let i = 0; i < botCount.value; i++) doFarm(true)
+}, 1000)
+
 onMounted(() => {
-  window.addEventListener('keydown', onKey)
-  _botInt = setInterval(() => {
-    for (let i = 0; i < botCount.value; i++) doFarm(true)
-  }, 1000)
   if (_tutShown) showTut.value = false
-})
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKey)
-  if (_botInt) clearInterval(_botInt)
 })
 
 // ══════════ SHORTHAND UTILS ══════════

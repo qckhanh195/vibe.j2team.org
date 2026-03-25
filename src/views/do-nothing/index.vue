@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onUnmounted, nextTick } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useEventListener } from '@vueuse/core'
 
 const TOTAL_SECONDS = 150 // 2 phút
 const secondsLeft = ref(TOTAL_SECONDS)
@@ -120,16 +121,11 @@ function handleInteraction(): void {
   }
 }
 
-onMounted(() => {
-  window.addEventListener('mousemove', handleInteraction)
-  window.addEventListener('keydown', handleInteraction)
-  window.addEventListener('touchstart', handleInteraction)
-})
+useEventListener(window, 'mousemove', handleInteraction)
+useEventListener(window, 'keydown', handleInteraction)
+useEventListener(window, 'touchstart', handleInteraction)
 
 onUnmounted(() => {
-  window.removeEventListener('mousemove', handleInteraction)
-  window.removeEventListener('keydown', handleInteraction)
-  window.removeEventListener('touchstart', handleInteraction)
   if (intervalId) clearInterval(intervalId)
   audioRef.value?.pause()
   stopBirdSound()
