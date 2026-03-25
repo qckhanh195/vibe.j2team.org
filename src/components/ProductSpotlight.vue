@@ -30,6 +30,7 @@ const { product, visible, dismiss } = useSpotlightProduct()
             <img
               :src="product.logo_url"
               :alt="product.name"
+              loading="lazy"
               class="w-10 h-10 object-cover flex-shrink-0"
             />
             <span class="font-display font-semibold text-text-primary text-sm leading-tight">
